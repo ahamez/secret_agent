@@ -1,6 +1,6 @@
 defmodule SecretsWatcher do
   @moduledoc """
-  This module provides the possibility to watch for a directory and to have callbacks called
+  This module provides the possibility to watch for a directory changes and to have callbacks called
   upon file modification.
 
   It's aimed at managing secrets rotation (typically credentials written by Vault). Thus,

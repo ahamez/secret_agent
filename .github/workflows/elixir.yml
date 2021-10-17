@@ -1,0 +1,79 @@
+name: Elixir CI
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  MIX_ENV: test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    name: OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: 1.12.3
+            otp: 24.1
+            check_deps: true
+            check_format: true
+            credo: true
+            dialyzer: true
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install inotify-tools
+      run: sudo apt-get install -y inotify-tools
+
+    - name: Set up Elixir
+      uses: erlef/setup-elixir@v1
+      with:
+        elixir-version: ${{matrix.elixir}}
+        otp-version: ${{matrix.otp}}
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v2
+      with:
+        path: deps
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+
+    - name: Restore PLT cache
+      uses: actions/cache@v2
+      with:
+        path: priv/plts
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+
+    - name: Install dependencies
+      run: |
+        mix local.rebar --force
+        mix local.hex --force
+        mix deps.get
+
+    - name: Compile prod with warnings as errors
+      run: MIX_ENV=prod mix compile --warnings-as-errors
+
+    - name: Run tests
+      run: mix coveralls.github
+
+    - name: Check formatting
+      run: mix format --check-formatted
+      if: ${{ matrix.check_format }}
+
+    - name: Check dependencies
+      run: mix deps.unlock --check-unused
+      if: ${{ matrix.check_deps }}
+
+    - name: Credo
+      run: mix credo
+      if: ${{ matrix.credo }}
+
+    - name: Dialyzer
+      run: mix dialyzer
+      if: ${{ matrix.dialyzer }}
