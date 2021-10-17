@@ -84,10 +84,7 @@ defmodule SecretsWatcher do
   end
 
   @impl true
-  def handle_info(
-        {:file_event, directory_watcher_pid, {path, events}},
-        %State{directory_watcher_pid: directory_watcher_pid} = state
-      ) do
+  def handle_info({:file_event, _pid, {path, events}}, state) do
     Logger.debug("Path #{inspect(path)}: #{inspect(events)}")
 
     case load_updated_secret(state.secrets, events, path) do

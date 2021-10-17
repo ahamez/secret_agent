@@ -84,16 +84,14 @@ defmodule SecretsWatcherTest do
            ]}
         )
 
-      %{directory_watcher_pid: watcher_pid} = :sys.get_state(pid)
-
       # Callback should be called when the content has been modified
       File.write!(secret_path, "new_secret_content")
-      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
+      send(pid, {:file_event, :dummy_pid, {secret_path, [:modified]}})
       assert_receive {^test_ref, ^secret_name, "new_secret_content"}
 
       # Callback should not be called when the content hasn't been modified
       File.write!(secret_path, "new_secret_content")
-      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
+      send(pid, {:file_event, :dummy_pid, {secret_path, [:modified]}})
       refute_receive {^test_ref, ^secret_name, "new_secret_content"}
     end
 
@@ -107,9 +105,8 @@ defmodule SecretsWatcherTest do
            secrets: [directory: tmp_dir, callbacks: %{"some_secret" => fn _, _ -> nil end}]}
         )
 
-      %{directory_watcher_pid: watcher_pid} = :sys.get_state(pid)
       File.write!(unwatched_secret_path, "dummy")
-      send(pid, {:file_event, watcher_pid, {unwatched_secret_path, [:modified]}})
+      send(pid, {:file_event, :dummy_pid, {unwatched_secret_path, [:modified]}})
 
       {:ok, some_wrapped_secret} = assert SecretsWatcher.get_wrapped_secret(pid, "some_secret")
       assert some_wrapped_secret.() == nil
