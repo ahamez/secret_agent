@@ -25,7 +25,7 @@ defmodule SecretsWatcher.MixProject do
 
   defp deps do
     [
-      {:credo, "~> 1.4", only: [:test, :dev], runtime: false},
+      {:credo, "~> 1.6", only: [:test, :dev], runtime: false},
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:excoveralls, "~> 0.13", only: [:test], runtime: false},
       {:ex_doc, "~> 0.22", only: [:dev], runtime: false},
