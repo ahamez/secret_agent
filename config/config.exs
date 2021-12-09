@@ -1,4 +1,4 @@
-use Mix.Config
+import Config
 
 # Configure git hooks
 if Mix.env() != :prod do
@@ -8,7 +8,7 @@ if Mix.env() != :prod do
     hooks: [
       pre_commit: [
         tasks: [
-          {:cmd, "mix credo"},
+          # {:cmd, "mix credo"},
           {:cmd, "mix format"}
         ]
       ],

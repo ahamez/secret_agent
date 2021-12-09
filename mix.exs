@@ -29,7 +29,8 @@ defmodule SecretsWatcher.MixProject do
       {:dialyxir, "~> 1.0", only: [:test, :dev], runtime: false},
       {:excoveralls, "~> 0.13", only: [:test], runtime: false},
       {:ex_doc, "~> 0.22", only: [:dev], runtime: false},
-      {:file_system, "~> 0.2"},
+      {:file_system,
+       git: "https://github.com/ahamez/file_system.git", branch: "no_tmp_dir", override: true},
       {:git_hooks, "~> 0.5", only: [:test, :dev], runtime: false},
       {:mix_test_watch, "~> 1.0", only: [:dev], runtime: false},
       {:nimble_options, "~> 0.3.0"}
