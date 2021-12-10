@@ -68,8 +68,8 @@ defmodule SecretsWatcher do
 
     {:ok, task_supervisor_pid} = Task.Supervisor.start_link()
 
-    {:ok, directory_watcher_pid} = FileSystem.start_link(dirs: [directory])
-    FileSystem.subscribe(directory_watcher_pid)
+    {:ok, directory_watcher_pid} = SecretsWatcherFileSystem.start_link(dirs: [directory])
+    SecretsWatcherFileSystem.subscribe(directory_watcher_pid)
 
     {
       :ok,
