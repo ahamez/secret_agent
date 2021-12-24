@@ -32,7 +32,7 @@ defmodule SecretsWatcher.MixProject do
       {:secrets_watcher_file_system, "~> 0.2.10"},
       {:git_hooks, "~> 0.5", only: [:test, :dev], runtime: false},
       {:mix_test_watch, "~> 1.0", only: [:dev], runtime: false},
-      {:nimble_options, "~> 0.3.0"}
+      {:nimble_options, "~> 0.4"}
     ]
   end
 
