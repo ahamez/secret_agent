@@ -167,6 +167,7 @@ defmodule SecretsWatcher do
           {:changed, secret_name, wrapped_new_secret}
       end
     else
+      Logger.debug("Unwatched events #{inspect(events)} on file #{path}")
       :unchanged
     end
   end
@@ -176,6 +177,7 @@ defmodule SecretsWatcher do
       :modified -> true
       :created -> true
       :renamed -> true
+      :moved_to -> true
       _ -> false
     end)
   end
