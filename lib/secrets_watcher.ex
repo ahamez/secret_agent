@@ -114,7 +114,7 @@ defmodule SecretsWatcher do
 
     task =
       Task.Supervisor.start_child(state.task_supervisor_pid, fn ->
-        callback.(secret_name, wrapped_secret)
+        callback.(wrapped_secret)
       end)
 
     case task do

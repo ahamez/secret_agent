@@ -30,7 +30,7 @@ defmodule SecretsWatcherTest do
           {SecretsWatcher,
            secrets: [
              directory: "",
-             callbacks: %{"secret" => fn _, _ -> nil end}
+             callbacks: %{"secret" => fn _ -> nil end}
            ]}
         )
 
@@ -47,7 +47,7 @@ defmodule SecretsWatcherTest do
           {SecretsWatcher,
            secrets: [
              directory: tmp_dir,
-             callbacks: %{secret_name => fn _, _ -> nil end}
+             callbacks: %{secret_name => fn _ -> nil end}
            ]}
         )
 
@@ -77,7 +77,7 @@ defmodule SecretsWatcherTest do
            secrets: [
              directory: tmp_dir,
              callbacks: %{
-               secret_name => fn secret_name, wrapped_secret ->
+               secret_name => fn wrapped_secret ->
                  send(test_pid, {test_ref, secret_name, wrapped_secret.()})
                end
              }
@@ -102,7 +102,7 @@ defmodule SecretsWatcherTest do
       pid =
         start_supervised!(
           {SecretsWatcher,
-           secrets: [directory: tmp_dir, callbacks: %{"some_secret" => fn _, _ -> nil end}]}
+           secrets: [directory: tmp_dir, callbacks: %{"some_secret" => fn _ -> nil end}]}
         )
 
       File.write!(unwatched_secret_path, "dummy")
