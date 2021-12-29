@@ -2,6 +2,8 @@ defmodule SecretsWatcherTest do
   use ExUnit.Case
   doctest SecretsWatcher
 
+  SecretsWatcher.Telemetry.attach_logger()
+
   describe "Launch process" do
     test "Success: start_link/1" do
       assert {:ok, _pid} =
@@ -95,8 +97,10 @@ defmodule SecretsWatcherTest do
            secrets_watcher_config: [
              directory: tmp_dir,
              secrets: [
-               {secret,
-                fn wrapped_secret -> send(test_pid, {test_ref, secret, wrapped_secret.()}) end}
+               {
+                 secret,
+                 fn wrapped_secret -> send(test_pid, {test_ref, secret, wrapped_secret.()}) end
+               }
              ]
            ]}
         )
@@ -112,7 +116,7 @@ defmodule SecretsWatcherTest do
       refute_receive {^test_ref, ^secret, "new_secret_content"}
     end
 
-    test "Success: update a file that is not a secret" do
+    test "Success: update a file that is not a watched secret doesn't update a watched secret" do
       tmp_dir = mk_tmp_random_dir()
       unwatched_secret_path = Path.join(tmp_dir, "unwatched_secret")
 
@@ -126,6 +130,35 @@ defmodule SecretsWatcherTest do
 
       {:ok, some_wrapped_secret} = assert SecretsWatcher.get_wrapped_secret(pid, "some_secret")
       assert some_wrapped_secret.() == nil
+    end
+  end
+
+  describe "Telemetry" do
+    test "Success: :file_event" do
+      {test_name, _arity} = __ENV__.function
+      parent = self()
+      ref = make_ref()
+
+      handler = fn event, _measurements, _metadata, _config ->
+        assert event == [:secrets_watcher, :file_event]
+        send(parent, {ref, :file_event_emitted})
+      end
+
+      :telemetry.attach(
+        to_string(test_name),
+        [:secrets_watcher, :file_event],
+        handler,
+        nil
+      )
+
+      pid =
+        start_supervised!(
+          {SecretsWatcher, secrets_watcher_config: [directory: "dummy_dir", secrets: []]}
+        )
+
+      send(pid, {:file_event, :dummy_pid, {"/dummy/path", [:modified]}})
+
+      assert_receive {^ref, :file_event_emitted}
     end
   end
 

@@ -24,7 +24,7 @@ defmodule SecretsWatcher do
 
   use GenServer
 
-  require Logger
+  alias SecretsWatcher.Telemetry
 
   defmodule State do
     @moduledoc false
@@ -87,25 +87,25 @@ defmodule SecretsWatcher do
 
   @impl true
   def handle_info({:file_event, _pid, {path, events}}, state) do
-    Logger.debug("Path #{inspect(path)}: #{inspect(events)}")
+    Telemetry.event(:file_event, %{events: events, path: path})
 
     case load_updated_secret(state.secrets, events, path) do
-      :unchanged ->
+      :ignore ->
         {:noreply, state}
 
       {:changed, secret_filename, wrapped_new_secret} ->
-        new_secrets = Map.put(state.secrets, secret_filename, wrapped_new_secret)
-        Logger.debug("Secret has changed", secret: secret_filename)
+        Telemetry.event(:changed_secret, %{secret_filename: secret_filename})
 
-        {:noreply, %{state | secrets: new_secrets},
-         {:continue, {:notify_secret_rotation, secret_filename}}}
+        {
+          :noreply,
+          %{state | secrets: Map.put(state.secrets, secret_filename, wrapped_new_secret)},
+          {:continue, {:notify_secret_rotation, secret_filename}}
+        }
     end
   end
 
   @impl true
   def handle_info(_, state) do
-    Logger.warn("#{__MODULE__} received unhandled message")
-
     {:noreply, state}
   end
 
@@ -114,16 +114,10 @@ defmodule SecretsWatcher do
     wrapped_secret = Map.fetch!(state.secrets, secret_filename)
     callback = Map.fetch!(state.callbacks, secret_filename)
 
-    task =
+    {:ok, _task_pid} =
       Task.Supervisor.start_child(state.task_supervisor_pid, fn ->
         callback.(wrapped_secret)
       end)
-
-    case task do
-      :ignore -> Logger.warn("Could not launch callback", secret: secret_filename)
-      {:error, _} -> Logger.warn("Could not launch callback", secret: secret_filename)
-      _ -> Logger.debug("Execute callback", secret: secret_filename)
-    end
 
     {:noreply, state}
   end
@@ -144,7 +138,7 @@ defmodule SecretsWatcher do
   defp load_secrets(directory, callbacks) do
     callbacks
     |> Enum.map(fn {secret_filename, _callback} ->
-      Logger.debug("Initial loading from '#{directory}'", secret: secret_filename)
+      Telemetry.event(:initial_loading, %{secret_filename: secret_filename, directory: directory})
 
       {secret_filename, load_secret(directory, secret_filename)}
     end)
@@ -159,18 +153,19 @@ defmodule SecretsWatcher do
       wrapped_previous_secret = Map.get(secrets, secret_filename)
 
       cond do
+        # `secret_filename` is not in `secrets`, we can ignore it.
         wrapped_previous_secret == nil ->
-          :unchanged
+          :ignore
 
         equal?(wrapped_previous_secret.(), wrapped_new_secret.()) ->
-          :unchanged
+          :ignore
 
         true ->
           {:changed, secret_filename, wrapped_new_secret}
       end
     else
-      Logger.debug("Unwatched events #{inspect(events)} on file #{path}")
-      :unchanged
+      Telemetry.event(:unwatched_events, %{events: events, path: path})
+      :ignore
     end
   end
 
