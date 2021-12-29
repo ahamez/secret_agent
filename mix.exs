@@ -4,7 +4,7 @@ defmodule SecretsWatcher.MixProject do
   def project do
     [
       app: :secrets_watcher,
-      version: "0.4.0",
+      version: "0.5.0",
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
