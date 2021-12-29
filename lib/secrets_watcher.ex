@@ -16,7 +16,7 @@ defmodule SecretsWatcher do
       type: :string,
       required: true
     ],
-    callbacks: [
+    secrets: [
       type: :any,
       required: true
     ]
@@ -43,7 +43,7 @@ defmodule SecretsWatcher do
   end
 
   def start_link(opts) do
-    {secrets_opts, opts} = Keyword.pop!(opts, :secrets)
+    {secrets_opts, opts} = Keyword.pop!(opts, :secrets_watcher_config)
 
     with {:ok, secrets_opts} <- NimbleOptions.validate(secrets_opts, @options_definition) do
       server_opts = Keyword.take(opts, [:name])
@@ -64,7 +64,9 @@ defmodule SecretsWatcher do
   @impl true
   def init(opts) do
     {directory, opts} = Keyword.pop!(opts, :directory)
-    {callbacks, _opts} = Keyword.pop!(opts, :callbacks)
+    {secrets, _opts} = Keyword.pop!(opts, :secrets)
+
+    callbacks = make_callbacks(secrets)
 
     {:ok, task_supervisor_pid} = Task.Supervisor.start_link()
 
@@ -200,5 +202,17 @@ defmodule SecretsWatcher do
       {:ok, secret} -> {secret_name, fn -> secret end}
       {:error, _} -> {secret_name, fn -> nil end}
     end
+  end
+
+  defp make_callbacks(secrets) when is_list(secrets) do
+    secrets
+    |> Enum.map(fn
+      {secret_filename, callback} when is_binary(secret_filename) and is_function(callback) ->
+        {secret_filename, callback}
+
+      secret_filename when is_binary(secret_filename) ->
+        {secret_filename, fn _ -> nil end}
+    end)
+    |> Enum.into(%{})
   end
 end
