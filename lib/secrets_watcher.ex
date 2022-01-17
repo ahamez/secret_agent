@@ -19,6 +19,11 @@ defmodule SecretsWatcher do
     secrets: [
       type: :any,
       required: true
+    ],
+    trim_secrets: [
+      type: :boolean,
+      required: false,
+      default: true
     ]
   ]
 
@@ -32,7 +37,8 @@ defmodule SecretsWatcher do
               directory: nil,
               directory_watcher_pid: nil,
               secrets: %{},
-              task_supervisor_pid: nil
+              task_supervisor_pid: nil,
+              trim_secrets: true
   end
 
   def child_spec(opts) do
@@ -64,7 +70,8 @@ defmodule SecretsWatcher do
   @impl true
   def init(opts) do
     {directory, opts} = Keyword.pop!(opts, :directory)
-    {secrets, _opts} = Keyword.pop!(opts, :secrets)
+    {secrets, opts} = Keyword.pop!(opts, :secrets)
+    {trim_secrets, _opts} = Keyword.pop!(opts, :trim_secrets)
 
     callbacks = make_callbacks(secrets)
 
@@ -78,9 +85,10 @@ defmodule SecretsWatcher do
       %State{
         callbacks: callbacks,
         directory: directory,
-        secrets: load_secrets(directory, callbacks),
+        secrets: load_secrets(directory, callbacks, trim_secrets),
         task_supervisor_pid: task_supervisor_pid,
-        directory_watcher_pid: directory_watcher_pid
+        directory_watcher_pid: directory_watcher_pid,
+        trim_secrets: trim_secrets
       }
     }
   end
@@ -89,7 +97,7 @@ defmodule SecretsWatcher do
   def handle_info({:file_event, _pid, {path, events}}, state) do
     Telemetry.event(:file_event, %{events: events, path: path})
 
-    case load_updated_secret(state.secrets, events, path) do
+    case load_updated_secret(state.secrets, events, path, state.trim_secrets) do
       :ignore ->
         {:noreply, state}
 
@@ -135,21 +143,21 @@ defmodule SecretsWatcher do
 
   # -- Private
 
-  defp load_secrets(directory, callbacks) do
+  defp load_secrets(directory, callbacks, trim_secrets) do
     callbacks
     |> Enum.map(fn {secret_filename, _callback} ->
       Telemetry.event(:initial_loading, %{secret_filename: secret_filename, directory: directory})
 
-      {secret_filename, load_secret(directory, secret_filename)}
+      {secret_filename, load_secret(directory, secret_filename, trim_secrets)}
     end)
     |> Enum.into(%{})
   end
 
-  defp load_updated_secret(secrets, events, path) do
+  defp load_updated_secret(secrets, events, path, trim_secret) do
     import SecretsWatcher.Compare
 
     if contains_watched_events?(events) and is_file?(path) do
-      {secret_filename, wrapped_new_secret} = load_secret_from_path(path)
+      {secret_filename, wrapped_new_secret} = load_secret_from_path(path, trim_secret)
       wrapped_previous_secret = Map.get(secrets, secret_filename)
 
       cond do
@@ -183,19 +191,29 @@ defmodule SecretsWatcher do
     File.exists?(path) and not File.dir?(path)
   end
 
-  defp load_secret(dir, secret_filename) do
+  defp load_secret(dir, secret_filename, trim_secret) do
     abs_path = Path.join(dir, secret_filename)
-    {^secret_filename, wrapped_secret} = load_secret_from_path(abs_path)
+    {^secret_filename, wrapped_secret} = load_secret_from_path(abs_path, trim_secret)
 
     wrapped_secret
   end
 
-  defp load_secret_from_path(path) do
+  defp load_secret_from_path(path, trim_secret) do
     secret_filename = Path.basename(path)
 
     case File.read(path) do
-      {:ok, secret} -> {secret_filename, fn -> secret end}
-      {:error, _} -> {secret_filename, fn -> nil end}
+      {:ok, secret} ->
+        secret =
+          if trim_secret do
+            String.trim(secret)
+          else
+            secret
+          end
+
+        {secret_filename, fn -> secret end}
+
+      {:error, _} ->
+        {secret_filename, fn -> nil end}
     end
   end
 

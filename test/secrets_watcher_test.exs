@@ -82,6 +82,48 @@ defmodule SecretsWatcherTest do
     end
   end
 
+  describe "Trim" do
+    test "Success: trim activated by default" do
+      tmp_dir = mk_tmp_random_dir()
+      secret_with_whitespaces = "   \nsecret\n  \n"
+      path = Path.join(tmp_dir, "secret_with_whitespaces")
+      File.write!(path, secret_with_whitespaces)
+
+      pid =
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [directory: tmp_dir, secrets: ["secret_with_whitespaces"]]}
+        )
+
+      assert {:ok, wrapped_secret} =
+               SecretsWatcher.get_wrapped_secret(pid, "secret_with_whitespaces")
+
+      assert wrapped_secret.() == String.trim(secret_with_whitespaces)
+    end
+
+    test "Success: trim deactivated" do
+      tmp_dir = mk_tmp_random_dir()
+      secret_with_whitespaces = "   \nsecret\n  \n"
+      path = Path.join(tmp_dir, "secret_with_whitespaces")
+      File.write!(path, secret_with_whitespaces)
+
+      pid =
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [
+             directory: tmp_dir,
+             secrets: ["secret_with_whitespaces"],
+             trim_secrets: false
+           ]}
+        )
+
+      assert {:ok, wrapped_secret} =
+               SecretsWatcher.get_wrapped_secret(pid, "secret_with_whitespaces")
+
+      assert wrapped_secret.() == secret_with_whitespaces
+    end
+  end
+
   describe "Secrets rotation" do
     test "Success: callback is invoked upon secret rotation" do
       tmp_dir = mk_tmp_random_dir()

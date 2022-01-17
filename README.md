@@ -44,6 +44,8 @@ end
     ```
     ℹ️ If you don't specify the `:name` option, `SecretsWatcher` will be used by default.
 
+    👉 By default, `secrets_watcher` trim secrets with [`String.trim/1`](https://hexdocs.pm/elixir/1.13.2/String.html#trim/1). You can deactivate this behavior with the option `trim_secrets`set to `false`.
+
 * Whenever you want to retrieve a secret, use `SecretsWatcher.get_wrapped_secret/2`:
     ```elixir
     {:ok, wrapped_credentials} =
