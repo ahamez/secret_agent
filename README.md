@@ -26,7 +26,7 @@ end
     ```
     ℹ️ Note that you actually use the filename of the secret to watch in a directory.
 
-    ℹ️ The form `{"secret_filename", callback}` registers a callback to be called each time a secret has changed on disk.
+    ℹ️ The form `{"secret_filename", callback}` registers a callback which is called each time a secret has changed on disk.
 
 * Configure and add `secrets_watcher` to your supervision tree:
     ```elixir
