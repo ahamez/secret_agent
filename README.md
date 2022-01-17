@@ -9,7 +9,7 @@ An Elixir library to watch secrets changes in a given directory.
 ```elixir
 def deps do
   [
-    {:secrets_watcher, "~> 0.5"}
+    {:secrets_watcher, "~> 0.6"}
   ]
 end
 ```
