@@ -49,6 +49,8 @@ defmodule SecretsWatcher do
   end
 
   def start_link(opts) do
+    :erlang.process_flag(:sensitive, true)
+
     {secrets_opts, opts} = Keyword.pop!(opts, :secrets_watcher_config)
 
     with {:ok, secrets_opts} <- NimbleOptions.validate(secrets_opts, @options_definition) do
