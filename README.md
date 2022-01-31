@@ -67,4 +67,4 @@ end
     secret = wrapped_credentials.()
     ```
 
-* You can manually update secrets with `SecretsWatcher.put_secret/3` and `SecretsWatcher.delete_secret/2`.
+* You can manually update secrets with `SecretsWatcher.put_secret/3` and `SecretsWatcher.erase_secret/2`.

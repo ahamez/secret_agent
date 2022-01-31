@@ -292,7 +292,7 @@ defmodule SecretsWatcherTest do
     end
   end
 
-  describe "Set and delete secrets manually" do
+  describe "Set and erase secrets manually" do
     test "Success: can put a secret" do
       pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
 
@@ -302,16 +302,16 @@ defmodule SecretsWatcherTest do
       assert wrapped_secret.() == "supersecret"
     end
 
-    test "Success: can delete a manually added secret" do
+    test "Success: can erase a manually added secret" do
       pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
 
       assert :ok = SecretsWatcher.put_secret(pid, "foo", fn -> "supersecret" end)
 
-      assert :ok = SecretsWatcher.delete_secret(pid, "foo")
-      assert {:error, :no_such_secret} = SecretsWatcher.get_secret(pid, "foo")
+      assert :ok = SecretsWatcher.erase_secret(pid, "foo")
+      assert {:ok, :erased} = SecretsWatcher.get_secret(pid, "foo")
     end
 
-    test "Success: can delete a watched secret" do
+    test "Success: can erase a watched secret" do
       tmp_dir = mk_tmp_random_dir()
 
       {secret_path, secret} = mk_random_secret(tmp_dir)
@@ -323,20 +323,20 @@ defmodule SecretsWatcherTest do
 
       %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
-      assert :ok = SecretsWatcher.delete_secret(pid, secret)
-      assert {:error, :no_such_secret} = SecretsWatcher.get_secret(pid, "foo")
+      assert :ok = SecretsWatcher.erase_secret(pid, secret)
+      assert {:ok, :erased} = SecretsWatcher.get_secret(pid, secret)
 
-      # A deleted secret is no longer watched.
+      # A watched secret can be updated if its content changes on disk.
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
-
-      assert {:error, :no_such_secret} = SecretsWatcher.get_secret(pid, "foo")
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
+      assert wrapped_secret.() == "new_secret_content"
     end
 
     test "Success: nothing happens when deleting a non-existing secret" do
       pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
 
-      assert :ok = SecretsWatcher.delete_secret(pid, "non_existing_secret")
+      assert :ok = SecretsWatcher.erase_secret(pid, "non_existing_secret")
     end
   end
 

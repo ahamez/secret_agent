@@ -58,21 +58,21 @@ defmodule SecretsWatcher do
   end
 
   @doc """
-  Return the secret value (wrapped in a closure) corresponding to `secret_name`.
+  Return the secret value (a closure or `:erased`) corresponding to `secret_name`.
   """
-  @spec get_secret(pid() | atom(), binary()) :: {:ok, function()} | {:error, term()}
+  @spec get_secret(pid() | atom(), binary()) :: {:ok, function() | :erased} | {:error, term()}
   def get_secret(server, secret_name) when is_binary(secret_name) do
     GenServer.call(server, {:get_secret, secret_name})
   end
 
   @doc """
-  Delete the secret value corresponding to `secret_name`.
+  Set the secret value of `secret_name` to `:erased`.
 
   If `secret_name` does not exist, nothing happen.
   """
-  @spec delete_secret(pid() | atom(), binary()) :: :ok
-  def delete_secret(server, secret_name) when is_binary(secret_name) do
-    GenServer.call(server, {:delete_secret, secret_name})
+  @spec erase_secret(pid() | atom(), binary()) :: :ok
+  def erase_secret(server, secret_name) when is_binary(secret_name) do
+    GenServer.call(server, {:erase_secret, secret_name})
   end
 
   @doc """
@@ -140,12 +140,12 @@ defmodule SecretsWatcher do
 
   @impl true
   def handle_continue({:notify_secret_rotation, secret_name}, state) do
-    wrapped_secret = Map.fetch!(state.secrets, secret_name)
+    wrapped_secret_or_erased = Map.fetch!(state.secrets, secret_name)
     callback = Map.fetch!(state.callbacks, secret_name)
 
     {:ok, _task_pid} =
       Task.Supervisor.start_child(state.task_supervisor_pid, fn ->
-        callback.(wrapped_secret)
+        callback.(wrapped_secret_or_erased)
       end)
 
     {:noreply, state}
@@ -156,15 +156,15 @@ defmodule SecretsWatcher do
     response =
       case Map.get(state.secrets, secret_name) do
         nil -> {:error, :no_such_secret}
-        wrapped_secret -> {:ok, wrapped_secret}
+        wrapped_secret_or_erased -> {:ok, wrapped_secret_or_erased}
       end
 
     {:reply, response, state}
   end
 
   @impl true
-  def handle_call({:delete_secret, secret_name}, _from, %State{} = state) do
-    secrets = Map.delete(state.secrets, secret_name)
+  def handle_call({:erase_secret, secret_name}, _from, %State{} = state) do
+    secrets = Map.replace(state.secrets, secret_name, :erased)
 
     {:reply, :ok, %State{state | secrets: secrets}}
   end
@@ -204,8 +204,6 @@ defmodule SecretsWatcher do
   end
 
   defp load_updated_secret(secrets, events, path, trim_secret) do
-    import SecretsWatcher.Compare
-
     if contains_watched_events?(events) and is_file?(path) do
       {secret_name, wrapped_new_secret} = load_secret_from_path(path, trim_secret)
       wrapped_previous_secret = Map.get(secrets, secret_name)
@@ -215,7 +213,10 @@ defmodule SecretsWatcher do
         wrapped_previous_secret == nil ->
           :ignore
 
-        equal?(wrapped_previous_secret.(), wrapped_new_secret.()) ->
+        wrapped_previous_secret == :erased ->
+          {:changed, secret_name, wrapped_new_secret}
+
+        SecretsWatcher.Compare.equal?(wrapped_previous_secret.(), wrapped_new_secret.()) ->
           :ignore
 
         true ->
