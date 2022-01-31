@@ -248,6 +248,54 @@ defmodule SecretsWatcherTest do
     end
   end
 
+  describe "Set and delete secrets manually" do
+    test "Success: can put a secret" do
+      pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
+
+      assert :ok = SecretsWatcher.put_wrapped_secret(pid, "foo", fn -> "supersecret" end)
+
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, "foo")
+      assert wrapped_secret.() == "supersecret"
+    end
+
+    test "Success: can delete a manually added secret" do
+      pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
+
+      assert :ok = SecretsWatcher.put_wrapped_secret(pid, "foo", fn -> "supersecret" end)
+
+      assert :ok = SecretsWatcher.delete_wrapped_secret(pid, "foo")
+      assert {:error, :no_such_secret} = SecretsWatcher.get_wrapped_secret(pid, "foo")
+    end
+
+    test "Success: can delete a watched secret" do
+      tmp_dir = mk_tmp_random_dir()
+
+      {secret_path, secret} = mk_random_secret(tmp_dir)
+
+      pid =
+        start_supervised!(
+          {SecretsWatcher, secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir]}]}
+        )
+
+      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+
+      assert :ok = SecretsWatcher.delete_wrapped_secret(pid, secret)
+      assert {:error, :no_such_secret} = SecretsWatcher.get_wrapped_secret(pid, "foo")
+
+      # A deleted secret is no longer watched.
+      File.write!(secret_path, "new_secret_content")
+      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
+
+      assert {:error, :no_such_secret} = SecretsWatcher.get_wrapped_secret(pid, "foo")
+    end
+
+    test "Success: nothing happens when deleting a non-existing secret" do
+      pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
+
+      assert :ok = SecretsWatcher.delete_wrapped_secret(pid, "non_existing_secret")
+    end
+  end
+
   describe "Telemetry" do
     test "Success: :file_event" do
       {test_name, _arity} = __ENV__.function

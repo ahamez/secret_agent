@@ -45,7 +45,7 @@ defmodule SecretsWatcher do
   end
 
   def start_link(opts) do
-    :erlang.process_flag(:sensitive, true)
+    Process.flag(:sensitive, true)
 
     {secrets_opts, opts} = Keyword.pop!(opts, :secrets_watcher_config)
 
@@ -56,20 +56,32 @@ defmodule SecretsWatcher do
   end
 
   @doc """
-  Return the secret (wrapped in a closure) corresponding to `secret_filename`.
+  Return the secret value (wrapped in a closure) corresponding to `secret_name`.
   """
   @spec get_wrapped_secret(pid() | atom(), binary()) :: {:ok, function()} | {:error, term()}
-  def get_wrapped_secret(server, secret_filename) when is_binary(secret_filename) do
-    GenServer.call(server, {:get_wrapped_secret, secret_filename})
+  def get_wrapped_secret(server, secret_name) when is_binary(secret_name) do
+    GenServer.call(server, {:get_wrapped_secret, secret_name})
   end
 
   @doc """
+  Delete the secret value corresponding to `secret_name`.
 
+  If `secret_name` does not exist, nothing happen.
   """
-  @spec compare(pid() | atom(), binary(), function()) :: {:ok, boolean()} | {:error, term()}
-  def compare(server, secret_filename, wrapped_secret)
-      when is_binary(secret_filename) and is_function(wrapped_secret) do
-    GenServer.call(server, {:compare, secret_filename, wrapped_secret})
+  @spec delete_wrapped_secret(pid() | atom(), binary()) :: :ok
+  def delete_wrapped_secret(server, secret_name) when is_binary(secret_name) do
+    GenServer.call(server, {:delete_wrapped_secret, secret_name})
+  end
+
+  @doc """
+  Set the secret value (wrapped in a closure) of `secret_name`.
+
+  If `secret_name` does not exist, it's added to existing secrets.
+  """
+  @spec put_wrapped_secret(pid() | atom(), binary(), function()) :: :ok
+  def put_wrapped_secret(server, secret_name, wrapped_secret)
+      when is_binary(secret_name) and is_function(wrapped_secret) do
+    GenServer.call(server, {:put_wrapped_secret, secret_name, wrapped_secret})
   end
 
   # -- GenServer
@@ -137,14 +149,28 @@ defmodule SecretsWatcher do
   end
 
   @impl true
-  def handle_call({:get_wrapped_secret, secret_filename}, _from, %State{} = state) do
+  def handle_call({:get_wrapped_secret, secret_name}, _from, %State{} = state) do
     response =
-      case Map.get(state.secrets, secret_filename) do
+      case Map.get(state.secrets, secret_name) do
         nil -> {:error, :no_such_secret}
         wrapped_secret -> {:ok, wrapped_secret}
       end
 
     {:reply, response, state}
+  end
+
+  @impl true
+  def handle_call({:delete_wrapped_secret, secret_name}, _from, %State{} = state) do
+    secrets = Map.delete(state.secrets, secret_name)
+
+    {:reply, :ok, %State{state | secrets: secrets}}
+  end
+
+  @impl true
+  def handle_call({:put_wrapped_secret, secret_name, wrapped_secret}, _from, %State{} = state) do
+    secrets = Map.put(state.secrets, secret_name, wrapped_secret)
+
+    {:reply, :ok, %State{state | secrets: secrets}}
   end
 
   # -- Private
