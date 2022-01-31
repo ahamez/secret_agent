@@ -256,7 +256,7 @@ defmodule SecretsWatcherTest do
       assert_receive {^test_ref, ^secret_2, "new_secret_content_2"}
     end
 
-    test "Success: update a file that is not a watched secret doesn't update a watched secret" do
+    test "Success: updating a file that is not a watched secret doesn't update a watched secret" do
       tmp_dir = mk_tmp_random_dir()
       unwatched_secret_path = Path.join(tmp_dir, "unwatched_secret")
 
@@ -273,6 +273,25 @@ defmodule SecretsWatcherTest do
 
       {:ok, some_wrapped_secret} = assert SecretsWatcher.get_wrapped_secret(pid, "some_secret")
       assert some_wrapped_secret.() == nil
+    end
+
+    test "Success: watched secret with initial value can be updated from disk" do
+      tmp_dir = mk_tmp_random_dir()
+      {secret_path, secret} = mk_random_secret(tmp_dir)
+
+      pid =
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
+        )
+
+      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+
+      File.write!(secret_path, "new_secret_content")
+      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
+
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, secret)
+      assert wrapped_secret.() == "new_secret_content"
     end
   end
 
