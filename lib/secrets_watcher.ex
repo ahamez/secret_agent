@@ -119,13 +119,13 @@ defmodule SecretsWatcher do
       :ignore ->
         {:noreply, state}
 
-      {:changed, secret_filename, wrapped_new_secret} ->
-        Telemetry.event(:changed_secret, %{secret_filename: secret_filename})
+      {:changed, secret_name, wrapped_new_secret} ->
+        Telemetry.event(:changed_secret, %{secret_name: secret_name})
 
         {
           :noreply,
-          %{state | secrets: Map.put(state.secrets, secret_filename, wrapped_new_secret)},
-          {:continue, {:notify_secret_rotation, secret_filename}}
+          %{state | secrets: Map.put(state.secrets, secret_name, wrapped_new_secret)},
+          {:continue, {:notify_secret_rotation, secret_name}}
         }
     end
   end
@@ -136,9 +136,9 @@ defmodule SecretsWatcher do
   end
 
   @impl true
-  def handle_continue({:notify_secret_rotation, secret_filename}, state) do
-    wrapped_secret = Map.fetch!(state.secrets, secret_filename)
-    callback = Map.fetch!(state.callbacks, secret_filename)
+  def handle_continue({:notify_secret_rotation, secret_name}, state) do
+    wrapped_secret = Map.fetch!(state.secrets, secret_name)
+    callback = Map.fetch!(state.callbacks, secret_name)
 
     {:ok, _task_pid} =
       Task.Supervisor.start_child(state.task_supervisor_pid, fn ->
@@ -178,15 +178,15 @@ defmodule SecretsWatcher do
   defp load_secrets(secrets, trim_secrets) do
     secrets
     |> Enum.map(fn
-      {secret_filename, secret_config} ->
+      {secret_name, secret_config} ->
         directory = Keyword.fetch!(secret_config, :directory)
 
         Telemetry.event(:initial_loading, %{
-          secret_filename: secret_filename,
+          secret_name: secret_name,
           directory: directory
         })
 
-        {secret_filename, load_secret(directory, secret_filename, trim_secrets)}
+        {secret_name, load_secret(directory, secret_name, trim_secrets)}
     end)
     |> Enum.into(%{})
   end
@@ -195,11 +195,11 @@ defmodule SecretsWatcher do
     import SecretsWatcher.Compare
 
     if contains_watched_events?(events) and is_file?(path) do
-      {secret_filename, wrapped_new_secret} = load_secret_from_path(path, trim_secret)
-      wrapped_previous_secret = Map.get(secrets, secret_filename)
+      {secret_name, wrapped_new_secret} = load_secret_from_path(path, trim_secret)
+      wrapped_previous_secret = Map.get(secrets, secret_name)
 
       cond do
-        # `secret_filename` is not in `secrets`, we can ignore it.
+        # `secret_name` is not in `secrets`, we can ignore it.
         wrapped_previous_secret == nil ->
           :ignore
 
@@ -207,7 +207,7 @@ defmodule SecretsWatcher do
           :ignore
 
         true ->
-          {:changed, secret_filename, wrapped_new_secret}
+          {:changed, secret_name, wrapped_new_secret}
       end
     else
       Telemetry.event(:unwatched_events, %{events: events, path: path})
@@ -229,15 +229,15 @@ defmodule SecretsWatcher do
     File.exists?(path) and not File.dir?(path)
   end
 
-  defp load_secret(dir, secret_filename, trim_secret) do
-    abs_path = Path.join(dir, secret_filename)
-    {^secret_filename, wrapped_secret} = load_secret_from_path(abs_path, trim_secret)
+  defp load_secret(dir, secret_name, trim_secret) do
+    abs_path = Path.join(dir, secret_name)
+    {^secret_name, wrapped_secret} = load_secret_from_path(abs_path, trim_secret)
 
     wrapped_secret
   end
 
   defp load_secret_from_path(path, trim_secret) do
-    secret_filename = Path.basename(path)
+    secret_name = Path.basename(path)
 
     case File.read(path) do
       {:ok, secret} ->
@@ -248,10 +248,10 @@ defmodule SecretsWatcher do
             secret
           end
 
-        {secret_filename, fn -> secret end}
+        {secret_name, fn -> secret end}
 
       {:error, _} ->
-        {secret_filename, fn -> nil end}
+        {secret_name, fn -> nil end}
     end
   end
 
@@ -273,10 +273,10 @@ defmodule SecretsWatcher do
 
   defp make_callbacks(secrets) when is_map(secrets) do
     secrets
-    |> Enum.map(fn {secret_filename, secret_config} ->
+    |> Enum.map(fn {secret_name, secret_config} ->
       case Keyword.get(secret_config, :callback) do
-        nil -> {secret_filename, fn _ -> nil end}
-        fun when is_function(fun) -> {secret_filename, fun}
+        nil -> {secret_name, fn _ -> nil end}
+        fun when is_function(fun) -> {secret_name, fun}
       end
     end)
     |> Enum.into(%{})
