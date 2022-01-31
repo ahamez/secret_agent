@@ -12,10 +12,6 @@ defmodule SecretsWatcher do
   """
 
   @options_definition [
-    directory: [
-      type: :string,
-      required: true
-    ],
     secrets: [
       type: :any,
       required: true
@@ -35,10 +31,10 @@ defmodule SecretsWatcher do
     @moduledoc false
     defstruct callbacks: %{},
               directory: nil,
-              directory_watcher_pid: nil,
               secrets: %{},
               task_supervisor_pid: nil,
-              trim_secrets: true
+              trim_secrets: true,
+              watcher_pid: nil
   end
 
   def child_spec(opts) do
@@ -67,36 +63,44 @@ defmodule SecretsWatcher do
     GenServer.call(server, {:get_wrapped_secret, secret_filename})
   end
 
+  @doc """
+
+  """
+  @spec compare(pid() | atom(), binary(), function()) :: {:ok, boolean()} | {:error, term()}
+  def compare(server, secret_filename, wrapped_secret)
+      when is_binary(secret_filename) and is_function(wrapped_secret) do
+    GenServer.call(server, {:compare, secret_filename, wrapped_secret})
+  end
+
   # -- GenServer
 
   @impl true
   def init(opts) do
-    {directory, opts} = Keyword.pop!(opts, :directory)
     {secrets, opts} = Keyword.pop!(opts, :secrets)
     {trim_secrets, _opts} = Keyword.pop!(opts, :trim_secrets)
 
-    callbacks = make_callbacks(secrets)
-
-    {:ok, task_supervisor_pid} = Task.Supervisor.start_link()
-
-    {:ok, directory_watcher_pid} = SecretsWatcherFileSystem.start_link(dirs: [directory])
-    SecretsWatcherFileSystem.subscribe(directory_watcher_pid)
-
-    {
-      :ok,
-      %State{
-        callbacks: callbacks,
-        directory: directory,
-        secrets: load_secrets(directory, callbacks, trim_secrets),
-        task_supervisor_pid: task_supervisor_pid,
-        directory_watcher_pid: directory_watcher_pid,
-        trim_secrets: trim_secrets
+    with {:ok, directories} <- get_directories(secrets),
+         callbacks = make_callbacks(secrets),
+         {:ok, task_supervisor_pid} <- Task.Supervisor.start_link(),
+         {:ok, watcher_pid} <- SecretsWatcherFileSystem.start_link(dirs: directories),
+         :ok <- SecretsWatcherFileSystem.subscribe(watcher_pid) do
+      {
+        :ok,
+        %State{
+          callbacks: callbacks,
+          secrets: load_secrets(secrets, trim_secrets),
+          task_supervisor_pid: task_supervisor_pid,
+          watcher_pid: watcher_pid,
+          trim_secrets: trim_secrets
+        }
       }
-    }
+    else
+      {:error, error} -> {:stop, error}
+    end
   end
 
   @impl true
-  def handle_info({:file_event, _pid, {path, events}}, state) do
+  def handle_info({:file_event, pid, {path, events}}, %State{watcher_pid: pid} = state) do
     Telemetry.event(:file_event, %{events: events, path: path})
 
     case load_updated_secret(state.secrets, events, path, state.trim_secrets) do
@@ -145,12 +149,18 @@ defmodule SecretsWatcher do
 
   # -- Private
 
-  defp load_secrets(directory, callbacks, trim_secrets) do
-    callbacks
-    |> Enum.map(fn {secret_filename, _callback} ->
-      Telemetry.event(:initial_loading, %{secret_filename: secret_filename, directory: directory})
+  defp load_secrets(secrets, trim_secrets) do
+    secrets
+    |> Enum.map(fn
+      {secret_filename, secret_config} ->
+        directory = Keyword.fetch!(secret_config, :directory)
 
-      {secret_filename, load_secret(directory, secret_filename, trim_secrets)}
+        Telemetry.event(:initial_loading, %{
+          secret_filename: secret_filename,
+          directory: directory
+        })
+
+        {secret_filename, load_secret(directory, secret_filename, trim_secrets)}
     end)
     |> Enum.into(%{})
   end
@@ -219,14 +229,29 @@ defmodule SecretsWatcher do
     end
   end
 
-  defp make_callbacks(secrets) when is_list(secrets) do
-    secrets
-    |> Enum.map(fn
-      {secret_filename, callback} when is_binary(secret_filename) and is_function(callback) ->
-        {secret_filename, callback}
+  defp get_directories(secrets) when is_map(secrets) do
+    Enum.reduce_while(secrets, {:ok, []}, fn {_secret_name, secret_config}, {:ok, acc} ->
+      case Keyword.get(secret_config, :directory) do
+        nil ->
+          {:halt, {:error, :missing_directory}}
 
-      secret_filename when is_binary(secret_filename) ->
-        {secret_filename, fn _ -> nil end}
+        directory ->
+          if directory in acc do
+            {:cont, {:ok, acc}}
+          else
+            {:cont, {:ok, [directory | acc]}}
+          end
+      end
+    end)
+  end
+
+  defp make_callbacks(secrets) when is_map(secrets) do
+    secrets
+    |> Enum.map(fn {secret_filename, secret_config} ->
+      case Keyword.get(secret_config, :callback) do
+        nil -> {secret_filename, fn _ -> nil end}
+        fun when is_function(fun) -> {secret_filename, fun}
+      end
     end)
     |> Enum.into(%{})
   end

@@ -7,16 +7,13 @@ defmodule SecretsWatcherTest do
   describe "Launch process" do
     test "Success: start_link/1" do
       assert {:ok, _pid} =
-               start_supervised(
-                 {SecretsWatcher, secrets_watcher_config: [directory: "", secrets: []]}
-               )
+               start_supervised({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
     end
 
     test "Success: start_link/1 with name" do
       assert {:ok, pid} =
                start_supervised(
-                 {SecretsWatcher,
-                  secrets_watcher_config: [directory: "", secrets: []], name: :foo}
+                 {SecretsWatcher, secrets_watcher_config: [secrets: %{}], name: :foo}
                )
 
       assert ^pid = Process.whereis(:foo)
@@ -24,7 +21,15 @@ defmodule SecretsWatcherTest do
 
     test "Failure: missing option" do
       assert {:error, {%NimbleOptions.ValidationError{}, _}} =
-               start_supervised({SecretsWatcher, secrets_watcher_config: [directory: ""]})
+               start_supervised({SecretsWatcher, secrets_watcher_config: []})
+    end
+
+    test "Failure: missing directory in secret configuration" do
+      assert {:error, {:missing_directory, _}} =
+               start_supervised(
+                 {SecretsWatcher,
+                  secrets_watcher_config: [secrets: %{"secret_without_directory" => []}]}
+               )
     end
   end
 
@@ -34,8 +39,7 @@ defmodule SecretsWatcherTest do
         start_supervised!(
           {SecretsWatcher,
            secrets_watcher_config: [
-             directory: "",
-             secrets: [{"secret", fn _ -> :dummy end}]
+             secrets: %{"secret" => [directory: "", callback: fn _ -> :dummy end]}
            ]}
         )
 
@@ -51,8 +55,7 @@ defmodule SecretsWatcherTest do
         start_supervised!(
           {SecretsWatcher,
            secrets_watcher_config: [
-             directory: tmp_dir,
-             secrets: [{secret, fn _ -> :dummy end}]
+             secrets: %{secret => [callback: fn _ -> :dummy end, directory: tmp_dir]}
            ]}
         )
 
@@ -66,16 +69,37 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher, secrets_watcher_config: [directory: tmp_dir, secrets: [secret]]}
+          {SecretsWatcher, secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir]}]}
         )
 
       assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, secret)
       assert wrapped_secret.() == secret
     end
 
-    test "Failure: accessing a non-existing secret returns an error" do
+    test "Success: read secrets from multiple directories" do
+      tmp_dir_1 = mk_tmp_random_dir()
+      tmp_dir_2 = mk_tmp_random_dir()
+
+      {_path, secret_1} = mk_random_secret(tmp_dir_1)
+      {_path, secret_2} = mk_random_secret(tmp_dir_2)
+
       pid =
-        start_supervised!({SecretsWatcher, secrets_watcher_config: [directory: "", secrets: []]})
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [
+             secrets: %{secret_1 => [directory: tmp_dir_1], secret_2 => [directory: tmp_dir_2]}
+           ]}
+        )
+
+      assert {:ok, wrapped_secret_1} = SecretsWatcher.get_wrapped_secret(pid, secret_1)
+      assert wrapped_secret_1.() == secret_1
+
+      assert {:ok, wrapped_secret_2} = SecretsWatcher.get_wrapped_secret(pid, secret_2)
+      assert wrapped_secret_2.() == secret_2
+    end
+
+    test "Failure: accessing a non-existing secret returns an error" do
+      pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
 
       assert {:error, :no_such_secret} =
                SecretsWatcher.get_wrapped_secret(pid, "non_existing_secret")
@@ -92,7 +116,7 @@ defmodule SecretsWatcherTest do
       pid =
         start_supervised!(
           {SecretsWatcher,
-           secrets_watcher_config: [directory: tmp_dir, secrets: ["secret_with_whitespaces"]]}
+           secrets_watcher_config: [secrets: %{"secret_with_whitespaces" => [directory: tmp_dir]}]}
         )
 
       assert {:ok, wrapped_secret} =
@@ -111,8 +135,7 @@ defmodule SecretsWatcherTest do
         start_supervised!(
           {SecretsWatcher,
            secrets_watcher_config: [
-             directory: tmp_dir,
-             secrets: ["secret_with_whitespaces"],
+             secrets: %{"secret_with_whitespaces" => [directory: tmp_dir]},
              trim_secrets: false
            ]}
         )
@@ -137,25 +160,72 @@ defmodule SecretsWatcherTest do
         start_supervised!(
           {SecretsWatcher,
            secrets_watcher_config: [
-             directory: tmp_dir,
-             secrets: [
-               {
-                 secret,
-                 fn wrapped_secret -> send(test_pid, {test_ref, secret, wrapped_secret.()}) end
-               }
-             ]
+             secrets: %{
+               secret => [
+                 directory: tmp_dir,
+                 callback: fn wrapped_secret ->
+                   send(test_pid, {test_ref, secret, wrapped_secret.()})
+                 end
+               ]
+             }
            ]}
         )
 
+      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+
       # Callback should be called when the content has been modified
       File.write!(secret_path, "new_secret_content")
-      send(pid, {:file_event, :dummy_pid, {secret_path, [:modified]}})
+      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
       assert_receive {^test_ref, ^secret, "new_secret_content"}
 
       # Callback should not be called when the content hasn't been modified
       File.write!(secret_path, "new_secret_content")
-      send(pid, {:file_event, :dummy_pid, {secret_path, [:modified]}})
+      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
       refute_receive {^test_ref, ^secret, "new_secret_content"}
+    end
+
+    test "Success: callbacks are invoked upon secret rotation in multiple directories" do
+      tmp_dir_1 = mk_tmp_random_dir()
+      tmp_dir_2 = mk_tmp_random_dir()
+
+      {secret_path_1, secret_1} = mk_random_secret(tmp_dir_1)
+      {secret_path_2, secret_2} = mk_random_secret(tmp_dir_2)
+
+      test_pid = self()
+      test_ref = make_ref()
+
+      pid =
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [
+             secrets: %{
+               secret_1 => [
+                 directory: tmp_dir_1,
+                 callback: fn wrapped_secret_1 ->
+                   send(test_pid, {test_ref, secret_1, wrapped_secret_1.()})
+                 end
+               ],
+               secret_2 => [
+                 directory: tmp_dir_2,
+                 callback: fn wrapped_secret_2 ->
+                   send(test_pid, {test_ref, secret_2, wrapped_secret_2.()})
+                 end
+               ]
+             }
+           ]}
+        )
+
+      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+
+      # Callback should be called when the content has been modified
+      File.write!(secret_path_1, "new_secret_content_1")
+      send(pid, {:file_event, watcher_pid, {secret_path_1, [:modified]}})
+      assert_receive {^test_ref, ^secret_1, "new_secret_content_1"}
+
+      # Callback should be called when the content has been modified
+      File.write!(secret_path_2, "new_secret_content_2")
+      send(pid, {:file_event, watcher_pid, {secret_path_2, [:modified]}})
+      assert_receive {^test_ref, ^secret_2, "new_secret_content_2"}
     end
 
     test "Success: update a file that is not a watched secret doesn't update a watched secret" do
@@ -164,11 +234,14 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher, secrets_watcher_config: [directory: tmp_dir, secrets: ["some_secret"]]}
+          {SecretsWatcher,
+           secrets_watcher_config: [secrets: %{"some_secret" => [directory: tmp_dir]}]}
         )
 
+      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+
       File.write!(unwatched_secret_path, "dummy")
-      send(pid, {:file_event, :dummy_pid, {unwatched_secret_path, [:modified]}})
+      send(pid, {:file_event, watcher_pid, {unwatched_secret_path, [:modified]}})
 
       {:ok, some_wrapped_secret} = assert SecretsWatcher.get_wrapped_secret(pid, "some_secret")
       assert some_wrapped_secret.() == nil
@@ -195,10 +268,13 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher, secrets_watcher_config: [directory: "dummy_dir", secrets: []]}
+          {SecretsWatcher,
+           secrets_watcher_config: [secrets: %{"dummy_secret" => [directory: "dummy_dir"]}]}
         )
 
-      send(pid, {:file_event, :dummy_pid, {"/dummy/path", [:modified]}})
+      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+
+      send(pid, {:file_event, watcher_pid, {"/dummy/path", [:modified]}})
 
       assert_receive {^ref, :file_event_emitted}
     end
