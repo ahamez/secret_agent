@@ -2,8 +2,6 @@ defmodule SecretsWatcherTest do
   use ExUnit.Case
   doctest SecretsWatcher
 
-  SecretsWatcher.Telemetry.attach_logger()
-
   describe "Launch process" do
     test "Success: start_link/1" do
       assert {:ok, _pid} =
@@ -298,20 +296,22 @@ defmodule SecretsWatcherTest do
 
   describe "Telemetry" do
     test "Success: :file_event" do
+      defmodule Handler do
+        def handler(event, _measurements, _metadata, config) do
+          assert event == [:secrets_watcher, :file_event]
+          send(config.parent, {config.ref, :file_event_emitted})
+        end
+      end
+
       {test_name, _arity} = __ENV__.function
       parent = self()
       ref = make_ref()
 
-      handler = fn event, _measurements, _metadata, _config ->
-        assert event == [:secrets_watcher, :file_event]
-        send(parent, {ref, :file_event_emitted})
-      end
-
       :telemetry.attach(
         to_string(test_name),
         [:secrets_watcher, :file_event],
-        handler,
-        nil
+        &Handler.handler/4,
+        %{parent: parent, ref: ref}
       )
 
       pid =
