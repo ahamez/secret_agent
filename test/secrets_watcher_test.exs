@@ -21,14 +21,6 @@ defmodule SecretsWatcherTest do
       assert {:error, {%NimbleOptions.ValidationError{}, _}} =
                start_supervised({SecretsWatcher, secrets_watcher_config: []})
     end
-
-    test "Failure: missing directory in secret configuration" do
-      assert {:error, {:missing_directory, _}} =
-               start_supervised(
-                 {SecretsWatcher,
-                  secrets_watcher_config: [secrets: %{"secret_without_directory" => []}]}
-               )
-    end
   end
 
   describe "Secrets management" do
@@ -101,6 +93,44 @@ defmodule SecretsWatcherTest do
 
       assert {:error, :no_such_secret} =
                SecretsWatcher.get_wrapped_secret(pid, "non_existing_secret")
+    end
+
+    test "Success: read in-memory secret from initial value " do
+      pid =
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [secrets: %{"in-memory-secret" => [value: "initial"]}]}
+        )
+
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, "in-memory-secret")
+
+      assert wrapped_secret.() == "initial"
+    end
+
+    test "Success: read in-memory secret without initial value is nil" do
+      pid =
+        start_supervised!(
+          {SecretsWatcher, secrets_watcher_config: [secrets: %{"in-memory-secret" => []}]}
+        )
+
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, "in-memory-secret")
+
+      assert wrapped_secret.() == nil
+    end
+
+    test "Success: initial value supersed file value" do
+      tmp_dir = mk_tmp_random_dir()
+      {_path, secret} = mk_random_secret(tmp_dir)
+
+      pid =
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
+        )
+
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, secret)
+
+      assert wrapped_secret.() == "initial"
     end
   end
 

@@ -91,9 +91,10 @@ defmodule SecretsWatcher do
     {secrets, opts} = Keyword.pop!(opts, :secrets)
     {trim_secrets, _opts} = Keyword.pop!(opts, :trim_secrets)
 
-    with {:ok, directories} <- get_directories(secrets),
-         callbacks = make_callbacks(secrets),
-         {:ok, task_supervisor_pid} <- Task.Supervisor.start_link(),
+    directories = get_directories(secrets)
+    callbacks = make_callbacks(secrets)
+
+    with {:ok, task_supervisor_pid} <- Task.Supervisor.start_link(),
          {:ok, watcher_pid} <- SecretsWatcherFileSystem.start_link(dirs: directories),
          :ok <- SecretsWatcherFileSystem.subscribe(watcher_pid) do
       {
@@ -179,14 +180,23 @@ defmodule SecretsWatcher do
     secrets
     |> Enum.map(fn
       {secret_name, secret_config} ->
-        directory = Keyword.fetch!(secret_config, :directory)
+        initial_value = Keyword.get(secret_config, :value)
+        directory = Keyword.get(secret_config, :directory)
 
-        Telemetry.event(:initial_loading, %{
-          secret_name: secret_name,
-          directory: directory
-        })
+        value =
+          cond do
+            initial_value ->
+              fn -> initial_value end
 
-        {secret_name, load_secret(directory, secret_name, trim_secrets)}
+            directory ->
+              Telemetry.event(:initial_loading, %{secret_name: secret_name, directory: directory})
+              load_secret(directory, secret_name, trim_secrets)
+
+            true ->
+              fn -> nil end
+          end
+
+        {secret_name, value}
     end)
     |> Enum.into(%{})
   end
@@ -256,16 +266,16 @@ defmodule SecretsWatcher do
   end
 
   defp get_directories(secrets) when is_map(secrets) do
-    Enum.reduce_while(secrets, {:ok, []}, fn {_secret_name, secret_config}, {:ok, acc} ->
+    Enum.reduce(secrets, [], fn {_secret_name, secret_config}, acc ->
       case Keyword.get(secret_config, :directory) do
         nil ->
-          {:halt, {:error, :missing_directory}}
+          acc
 
         directory ->
           if directory in acc do
-            {:cont, {:ok, acc}}
+            acc
           else
-            {:cont, {:ok, [directory | acc]}}
+            [directory | acc]
           end
       end
     end)
