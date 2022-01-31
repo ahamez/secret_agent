@@ -1,7 +1,6 @@
 defmodule SecretsWatcher do
   @moduledoc """
-  This module provides the possibility to watch for a directory changes and to have callbacks called
-  upon file modification.
+  This module provides the possibility to manage secrets and to watch for directory changes.
 
   It's aimed at managing secrets rotation (typically credentials written by Vault). Thus,
   it wraps secrets in closures to avoid leaking and use a constant-time comparison function
@@ -44,6 +43,9 @@ defmodule SecretsWatcher do
     }
   end
 
+  @doc """
+  Start `secrets_watcher` as a linked process.
+  """
   def start_link(opts) do
     Process.flag(:sensitive, true)
 
