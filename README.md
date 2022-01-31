@@ -38,6 +38,8 @@ end
 
     ℹ️ The `:value` option specifies the initial value of the secret (default to `nil` for in-memory secrets). Supersed the value from the file if the `:directory` option has been set.
 
+    👉 Only watched secrets should be configured at initialization time, you can add in-memory secrets dynamically with `SecretsWatcher.put_secret/3`.
+
 
 * Configure and add `secrets_watcher` to your supervision tree:
     ```elixir
