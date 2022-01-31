@@ -60,9 +60,9 @@ defmodule SecretsWatcher do
   @doc """
   Return the secret value (wrapped in a closure) corresponding to `secret_name`.
   """
-  @spec get_wrapped_secret(pid() | atom(), binary()) :: {:ok, function()} | {:error, term()}
-  def get_wrapped_secret(server, secret_name) when is_binary(secret_name) do
-    GenServer.call(server, {:get_wrapped_secret, secret_name})
+  @spec get_secret(pid() | atom(), binary()) :: {:ok, function()} | {:error, term()}
+  def get_secret(server, secret_name) when is_binary(secret_name) do
+    GenServer.call(server, {:get_secret, secret_name})
   end
 
   @doc """
@@ -70,9 +70,9 @@ defmodule SecretsWatcher do
 
   If `secret_name` does not exist, nothing happen.
   """
-  @spec delete_wrapped_secret(pid() | atom(), binary()) :: :ok
-  def delete_wrapped_secret(server, secret_name) when is_binary(secret_name) do
-    GenServer.call(server, {:delete_wrapped_secret, secret_name})
+  @spec delete_secret(pid() | atom(), binary()) :: :ok
+  def delete_secret(server, secret_name) when is_binary(secret_name) do
+    GenServer.call(server, {:delete_secret, secret_name})
   end
 
   @doc """
@@ -80,10 +80,10 @@ defmodule SecretsWatcher do
 
   If `secret_name` does not exist, it's added to existing secrets.
   """
-  @spec put_wrapped_secret(pid() | atom(), binary(), function()) :: :ok
-  def put_wrapped_secret(server, secret_name, wrapped_secret)
+  @spec put_secret(pid() | atom(), binary(), function()) :: :ok
+  def put_secret(server, secret_name, wrapped_secret)
       when is_binary(secret_name) and is_function(wrapped_secret) do
-    GenServer.call(server, {:put_wrapped_secret, secret_name, wrapped_secret})
+    GenServer.call(server, {:put_secret, secret_name, wrapped_secret})
   end
 
   # -- GenServer
@@ -152,7 +152,7 @@ defmodule SecretsWatcher do
   end
 
   @impl true
-  def handle_call({:get_wrapped_secret, secret_name}, _from, %State{} = state) do
+  def handle_call({:get_secret, secret_name}, _from, %State{} = state) do
     response =
       case Map.get(state.secrets, secret_name) do
         nil -> {:error, :no_such_secret}
@@ -163,14 +163,14 @@ defmodule SecretsWatcher do
   end
 
   @impl true
-  def handle_call({:delete_wrapped_secret, secret_name}, _from, %State{} = state) do
+  def handle_call({:delete_secret, secret_name}, _from, %State{} = state) do
     secrets = Map.delete(state.secrets, secret_name)
 
     {:reply, :ok, %State{state | secrets: secrets}}
   end
 
   @impl true
-  def handle_call({:put_wrapped_secret, secret_name, wrapped_secret}, _from, %State{} = state) do
+  def handle_call({:put_secret, secret_name, wrapped_secret}, _from, %State{} = state) do
     secrets = Map.put(state.secrets, secret_name, wrapped_secret)
 
     {:reply, :ok, %State{state | secrets: secrets}}

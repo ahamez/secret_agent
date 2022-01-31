@@ -57,12 +57,12 @@ end
 
     👉 By default, `secrets_watcher` trim watched secrets read on disk with [`String.trim/1`](https://hexdocs.pm/elixir/1.13.2/String.html#trim/1). You can deactivate this behavior with the option `trim_secrets` set to `false`.
 
-* Whenever you want to retrieve a secret, use `SecretsWatcher.get_wrapped_secret/2`:
+* Whenever you want to retrieve a secret, use `SecretsWatcher.get_secret/2`:
     ```elixir
     {:ok, wrapped_credentials} =
-      SecretsWatcher.get_wrapped_secret(:secrets, "aws-credentials.json")
+      SecretsWatcher.get_secret(:secrets, "aws-credentials.json")
 
     secret = wrapped_credentials.()
     ```
 
-* You can manually update secrets with `SecretsWatcher.put_wrapped_secret/3` and `SecretsWatcher.delete_wrapped_secret/2`.
+* You can manually update secrets with `SecretsWatcher.put_secret/3` and `SecretsWatcher.delete_secret/2`.

@@ -33,7 +33,7 @@ defmodule SecretsWatcherTest do
            ]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, "secret")
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret")
       assert wrapped_secret.() == nil
     end
 
@@ -49,7 +49,7 @@ defmodule SecretsWatcherTest do
            ]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
       assert wrapped_secret.() == secret
     end
 
@@ -62,7 +62,7 @@ defmodule SecretsWatcherTest do
           {SecretsWatcher, secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
       assert wrapped_secret.() == secret
     end
 
@@ -81,18 +81,17 @@ defmodule SecretsWatcherTest do
            ]}
         )
 
-      assert {:ok, wrapped_secret_1} = SecretsWatcher.get_wrapped_secret(pid, secret_1)
+      assert {:ok, wrapped_secret_1} = SecretsWatcher.get_secret(pid, secret_1)
       assert wrapped_secret_1.() == secret_1
 
-      assert {:ok, wrapped_secret_2} = SecretsWatcher.get_wrapped_secret(pid, secret_2)
+      assert {:ok, wrapped_secret_2} = SecretsWatcher.get_secret(pid, secret_2)
       assert wrapped_secret_2.() == secret_2
     end
 
     test "Failure: accessing a non-existing secret returns an error" do
       pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
 
-      assert {:error, :no_such_secret} =
-               SecretsWatcher.get_wrapped_secret(pid, "non_existing_secret")
+      assert {:error, :no_such_secret} = SecretsWatcher.get_secret(pid, "non_existing_secret")
     end
 
     test "Success: read in-memory secret from initial value " do
@@ -102,7 +101,7 @@ defmodule SecretsWatcherTest do
            secrets_watcher_config: [secrets: %{"in-memory-secret" => [value: "initial"]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, "in-memory-secret")
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "in-memory-secret")
 
       assert wrapped_secret.() == "initial"
     end
@@ -113,7 +112,7 @@ defmodule SecretsWatcherTest do
           {SecretsWatcher, secrets_watcher_config: [secrets: %{"in-memory-secret" => []}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, "in-memory-secret")
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "in-memory-secret")
 
       assert wrapped_secret.() == nil
     end
@@ -128,7 +127,7 @@ defmodule SecretsWatcherTest do
            secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
 
       assert wrapped_secret.() == "initial"
     end
@@ -147,8 +146,7 @@ defmodule SecretsWatcherTest do
            secrets_watcher_config: [secrets: %{"secret_with_whitespaces" => [directory: tmp_dir]}]}
         )
 
-      assert {:ok, wrapped_secret} =
-               SecretsWatcher.get_wrapped_secret(pid, "secret_with_whitespaces")
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret_with_whitespaces")
 
       assert wrapped_secret.() == String.trim(secret_with_whitespaces)
     end
@@ -168,8 +166,7 @@ defmodule SecretsWatcherTest do
            ]}
         )
 
-      assert {:ok, wrapped_secret} =
-               SecretsWatcher.get_wrapped_secret(pid, "secret_with_whitespaces")
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret_with_whitespaces")
 
       assert wrapped_secret.() == secret_with_whitespaces
     end
@@ -271,7 +268,7 @@ defmodule SecretsWatcherTest do
       File.write!(unwatched_secret_path, "dummy")
       send(pid, {:file_event, watcher_pid, {unwatched_secret_path, [:modified]}})
 
-      {:ok, some_wrapped_secret} = assert SecretsWatcher.get_wrapped_secret(pid, "some_secret")
+      {:ok, some_wrapped_secret} = assert SecretsWatcher.get_secret(pid, "some_secret")
       assert some_wrapped_secret.() == nil
     end
 
@@ -290,7 +287,7 @@ defmodule SecretsWatcherTest do
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
       assert wrapped_secret.() == "new_secret_content"
     end
   end
@@ -299,19 +296,19 @@ defmodule SecretsWatcherTest do
     test "Success: can put a secret" do
       pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
 
-      assert :ok = SecretsWatcher.put_wrapped_secret(pid, "foo", fn -> "supersecret" end)
+      assert :ok = SecretsWatcher.put_secret(pid, "foo", fn -> "supersecret" end)
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_wrapped_secret(pid, "foo")
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "foo")
       assert wrapped_secret.() == "supersecret"
     end
 
     test "Success: can delete a manually added secret" do
       pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
 
-      assert :ok = SecretsWatcher.put_wrapped_secret(pid, "foo", fn -> "supersecret" end)
+      assert :ok = SecretsWatcher.put_secret(pid, "foo", fn -> "supersecret" end)
 
-      assert :ok = SecretsWatcher.delete_wrapped_secret(pid, "foo")
-      assert {:error, :no_such_secret} = SecretsWatcher.get_wrapped_secret(pid, "foo")
+      assert :ok = SecretsWatcher.delete_secret(pid, "foo")
+      assert {:error, :no_such_secret} = SecretsWatcher.get_secret(pid, "foo")
     end
 
     test "Success: can delete a watched secret" do
@@ -326,20 +323,20 @@ defmodule SecretsWatcherTest do
 
       %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
-      assert :ok = SecretsWatcher.delete_wrapped_secret(pid, secret)
-      assert {:error, :no_such_secret} = SecretsWatcher.get_wrapped_secret(pid, "foo")
+      assert :ok = SecretsWatcher.delete_secret(pid, secret)
+      assert {:error, :no_such_secret} = SecretsWatcher.get_secret(pid, "foo")
 
       # A deleted secret is no longer watched.
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
 
-      assert {:error, :no_such_secret} = SecretsWatcher.get_wrapped_secret(pid, "foo")
+      assert {:error, :no_such_secret} = SecretsWatcher.get_secret(pid, "foo")
     end
 
     test "Success: nothing happens when deleting a non-existing secret" do
       pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
 
-      assert :ok = SecretsWatcher.delete_wrapped_secret(pid, "non_existing_secret")
+      assert :ok = SecretsWatcher.delete_secret(pid, "non_existing_secret")
     end
   end
 
