@@ -191,8 +191,7 @@ defmodule SecretsWatcher do
   # -- Private
 
   defp load_initial_secrets(secrets, trim_secrets) do
-    secrets
-    |> Enum.map(fn {secret_name, secret_config} ->
+    Map.new(secrets, fn {secret_name, secret_config} ->
       initial_value = Keyword.fetch!(secret_config, :value)
       directory = Keyword.fetch!(secret_config, :directory)
 
@@ -216,7 +215,6 @@ defmodule SecretsWatcher do
 
       {secret_name, value}
     end)
-    |> Enum.into(%{})
   end
 
   defp load_updated_secret(secrets, events, path, trim_secret) do
