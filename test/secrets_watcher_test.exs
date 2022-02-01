@@ -21,6 +21,16 @@ defmodule SecretsWatcherTest do
       assert {:error, {%NimbleOptions.ValidationError{}, _}} =
                start_supervised({SecretsWatcher, secrets_watcher_config: []})
     end
+
+    test "Failure: invalid key in secret config" do
+      assert {:error, {{:invalid_secret_config, "secret_name", [:invalid_option]}, _}} =
+               start_supervised(
+                 {SecretsWatcher,
+                  secrets_watcher_config: [
+                    secrets: %{"secret_name" => [invalid_option: :dummy]}
+                  ]}
+               )
+    end
   end
 
   describe "Secrets management" do

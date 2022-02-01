@@ -22,6 +22,17 @@ defmodule SecretsWatcher do
     ]
   ]
 
+  defmodule DefaultCallback do
+    @moduledoc false
+    def no_op(_wrapped_secret), do: nil
+  end
+
+  @secret_config_options [
+    directory: nil,
+    value: nil,
+    callback: &DefaultCallback.no_op/1
+  ]
+
   use GenServer
 
   alias SecretsWatcher.Telemetry
@@ -93,17 +104,17 @@ defmodule SecretsWatcher do
     {secrets, opts} = Keyword.pop!(opts, :secrets)
     {trim_secrets, _opts} = Keyword.pop!(opts, :trim_secrets)
 
-    directories = get_directories(secrets)
-    callbacks = make_callbacks(secrets)
-
-    with {:ok, task_supervisor_pid} <- Task.Supervisor.start_link(),
+    with {:ok, secrets} <- validate_secrets_config(secrets),
+         directories = get_directories(secrets),
+         callbacks = get_callbacks(secrets),
+         {:ok, task_supervisor_pid} <- Task.Supervisor.start_link(),
          {:ok, watcher_pid} <- SecretsWatcherFileSystem.start_link(dirs: directories),
          :ok <- SecretsWatcherFileSystem.subscribe(watcher_pid) do
       {
         :ok,
         %State{
           callbacks: callbacks,
-          secrets: load_secrets(secrets, trim_secrets),
+          secrets: load_initial_secrets(secrets, trim_secrets),
           task_supervisor_pid: task_supervisor_pid,
           watcher_pid: watcher_pid,
           trim_secrets: trim_secrets
@@ -178,27 +189,27 @@ defmodule SecretsWatcher do
 
   # -- Private
 
-  defp load_secrets(secrets, trim_secrets) do
+  defp load_initial_secrets(secrets, trim_secrets) do
     secrets
-    |> Enum.map(fn
-      {secret_name, secret_config} ->
-        initial_value = Keyword.get(secret_config, :value)
-        directory = Keyword.get(secret_config, :directory)
+    |> Enum.map(fn {secret_name, secret_config} ->
+      initial_value = Keyword.fetch!(secret_config, :value)
+      directory = Keyword.fetch!(secret_config, :directory)
 
-        value =
-          cond do
-            initial_value ->
-              fn -> initial_value end
+      value =
+        cond do
+          initial_value ->
+            fn -> initial_value end
 
-            directory ->
-              Telemetry.event(:initial_loading, %{secret_name: secret_name, directory: directory})
-              load_secret(directory, secret_name, trim_secrets)
+          directory ->
+            Telemetry.event(:initial_loading, %{secret_name: secret_name, directory: directory})
+            load_secret(directory, secret_name, trim_secrets)
 
-            true ->
-              fn -> nil end
-          end
 
-        {secret_name, value}
+          true ->
+            fn -> nil end
+        end
+
+      {secret_name, value}
     end)
     |> Enum.into(%{})
   end
@@ -268,6 +279,18 @@ defmodule SecretsWatcher do
     end
   end
 
+  defp validate_secrets_config(secrets) when is_map(secrets) do
+    Enum.reduce_while(secrets, {:ok, %{}}, fn {secret_name, secret_config}, {:ok, acc} ->
+      case Keyword.validate(secret_config, @secret_config_options) do
+        {:ok, secret_config} ->
+          {:cont, {:ok, Map.put(acc, secret_name, secret_config)}}
+
+        {:error, invalid_options} ->
+          {:halt, {:error, {:invalid_secret_config, secret_name, invalid_options}}}
+      end
+    end)
+  end
+
   defp get_directories(secrets) when is_map(secrets) do
     Enum.reduce(secrets, [], fn {_secret_name, secret_config}, acc ->
       case Keyword.get(secret_config, :directory) do
@@ -284,14 +307,9 @@ defmodule SecretsWatcher do
     end)
   end
 
-  defp make_callbacks(secrets) when is_map(secrets) do
-    secrets
-    |> Enum.map(fn {secret_name, secret_config} ->
-      case Keyword.get(secret_config, :callback) do
-        nil -> {secret_name, fn _ -> nil end}
-        fun when is_function(fun) -> {secret_name, fun}
-      end
+  defp get_callbacks(secrets) when is_map(secrets) do
+    Map.new(secrets, fn {secret_name, secret_config} ->
+      {secret_name, Keyword.fetch!(secret_config, :callback)}
     end)
-    |> Enum.into(%{})
   end
 end

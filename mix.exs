@@ -5,7 +5,7 @@ defmodule SecretsWatcher.MixProject do
     [
       app: :secrets_watcher,
       version: "0.6.1",
-      elixir: "~> 1.12",
+      elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       test_coverage: [tool: ExCoveralls],
