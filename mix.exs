@@ -1,16 +1,16 @@
-defmodule SecretsWatcher.MixProject do
+defmodule SecretAgent.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :secrets_watcher,
+      app: :secret_agent,
       version: "0.6.1",
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       test_coverage: [tool: ExCoveralls],
-      name: "Secrets Watcher",
-      source_url: "https://github.com/ahamez/secrets_watcher",
+      name: "Secret Agent",
+      source_url: "https://github.com/ahamez/secret_agent",
       description: description(),
       package: package(),
       dialyzer: [plt_local_path: "priv/plts"]
@@ -45,11 +45,11 @@ defmodule SecretsWatcher.MixProject do
 
   defp package do
     [
-      name: :secrets_watcher,
+      name: :secret_agent,
       files: ["lib", "mix.exs", "README*", "LICENSE"],
       maintainers: ["Alexandre Hamez"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/ahamez/secrets_watcher"},
+      links: %{"GitHub" => "https://github.com/ahamez/secret_agent"},
       exclude_patterns: [".DS_Store"]
     ]
   end

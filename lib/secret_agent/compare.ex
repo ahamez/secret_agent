@@ -1,4 +1,4 @@
-defmodule SecretsWatcher.Compare do
+defmodule SecretAgent.Compare do
   @moduledoc """
   This module provides a function to compare secrets in constant time to
   avoid timing attacks.

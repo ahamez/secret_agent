@@ -1,32 +1,29 @@
-defmodule SecretsWatcherTest do
+defmodule SecretAgentTest do
   use ExUnit.Case
-  doctest SecretsWatcher
+  doctest SecretAgent
 
   describe "Launch process" do
     test "Success: start_link/1" do
-      assert {:ok, _pid} =
-               start_supervised({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
+      assert {:ok, _pid} = start_supervised({SecretAgent, secret_agent_config: [secrets: %{}]})
     end
 
     test "Success: start_link/1 with name" do
       assert {:ok, pid} =
-               start_supervised(
-                 {SecretsWatcher, secrets_watcher_config: [secrets: %{}], name: :foo}
-               )
+               start_supervised({SecretAgent, secret_agent_config: [secrets: %{}], name: :foo})
 
       assert ^pid = Process.whereis(:foo)
     end
 
     test "Failure: missing option" do
       assert {:error, {%NimbleOptions.ValidationError{}, _}} =
-               start_supervised({SecretsWatcher, secrets_watcher_config: []})
+               start_supervised({SecretAgent, secret_agent_config: []})
     end
 
     test "Failure: invalid key in secret config" do
       assert {:error, {{:invalid_secret_config, "secret_name", [:invalid_option]}, _}} =
                start_supervised(
-                 {SecretsWatcher,
-                  secrets_watcher_config: [
+                 {SecretAgent,
+                  secret_agent_config: [
                     secrets: %{"secret_name" => [invalid_option: :dummy]}
                   ]}
                )
@@ -37,13 +34,13 @@ defmodule SecretsWatcherTest do
     test "Success: secret with no initial file is nil" do
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [
+          {SecretAgent,
+           secret_agent_config: [
              secrets: %{"secret" => [directory: "", callback: fn _ -> :dummy end]}
            ]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret")
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "secret")
       assert wrapped_secret.() == nil
     end
 
@@ -53,13 +50,13 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [
+          {SecretAgent,
+           secret_agent_config: [
              secrets: %{secret => [callback: fn _ -> :dummy end, directory: tmp_dir]}
            ]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
       assert wrapped_secret.() == secret
     end
 
@@ -69,10 +66,10 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher, secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir]}]}
+          {SecretAgent, secret_agent_config: [secrets: %{secret => [directory: tmp_dir]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
       assert wrapped_secret.() == secret
     end
 
@@ -85,33 +82,33 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [
+          {SecretAgent,
+           secret_agent_config: [
              secrets: %{secret_1 => [directory: tmp_dir_1], secret_2 => [directory: tmp_dir_2]}
            ]}
         )
 
-      assert {:ok, wrapped_secret_1} = SecretsWatcher.get_secret(pid, secret_1)
+      assert {:ok, wrapped_secret_1} = SecretAgent.get_secret(pid, secret_1)
       assert wrapped_secret_1.() == secret_1
 
-      assert {:ok, wrapped_secret_2} = SecretsWatcher.get_secret(pid, secret_2)
+      assert {:ok, wrapped_secret_2} = SecretAgent.get_secret(pid, secret_2)
       assert wrapped_secret_2.() == secret_2
     end
 
     test "Failure: accessing a non-existing secret returns an error" do
-      pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
+      pid = start_supervised!({SecretAgent, secret_agent_config: [secrets: %{}]})
 
-      assert {:error, :no_such_secret} = SecretsWatcher.get_secret(pid, "non_existing_secret")
+      assert {:error, :no_such_secret} = SecretAgent.get_secret(pid, "non_existing_secret")
     end
 
     test "Success: read in-memory secret from initial value " do
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [secrets: %{"in-memory-secret" => [value: "initial"]}]}
+          {SecretAgent,
+           secret_agent_config: [secrets: %{"in-memory-secret" => [value: "initial"]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "in-memory-secret")
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "in-memory-secret")
 
       assert wrapped_secret.() == "initial"
     end
@@ -119,10 +116,10 @@ defmodule SecretsWatcherTest do
     test "Success: read in-memory secret without initial value is nil" do
       pid =
         start_supervised!(
-          {SecretsWatcher, secrets_watcher_config: [secrets: %{"in-memory-secret" => []}]}
+          {SecretAgent, secret_agent_config: [secrets: %{"in-memory-secret" => []}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "in-memory-secret")
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "in-memory-secret")
 
       assert wrapped_secret.() == nil
     end
@@ -133,11 +130,11 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
+          {SecretAgent,
+           secret_agent_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
 
       assert wrapped_secret.() == "initial"
     end
@@ -151,8 +148,8 @@ defmodule SecretsWatcherTest do
       test_ref = make_ref()
 
       start_supervised!(
-        {SecretsWatcher,
-         secrets_watcher_config: [
+        {SecretAgent,
+         secret_agent_config: [
            secrets: %{
              secret => [
                directory: tmp_dir,
@@ -170,27 +167,25 @@ defmodule SecretsWatcherTest do
     test "Success: a secret is erased after having being accessed" do
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [secrets: %{"secret" => [value: "some_value"]}]}
+          {SecretAgent, secret_agent_config: [secrets: %{"secret" => [value: "some_value"]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret")
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "secret")
       assert wrapped_secret.() == "some_value"
 
-      assert {:ok, :erased} = SecretsWatcher.get_secret(pid, "secret")
+      assert {:ok, :erased} = SecretAgent.get_secret(pid, "secret")
     end
 
     test "Success: can override erasing a secret" do
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [secrets: %{"secret" => [value: "some_value"]}]}
+          {SecretAgent, secret_agent_config: [secrets: %{"secret" => [value: "some_value"]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret", erase: false)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "secret", erase: false)
       assert wrapped_secret.() == "some_value"
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret")
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "secret")
       assert wrapped_secret.() == "some_value"
     end
   end
@@ -204,11 +199,11 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [secrets: %{"secret_with_whitespaces" => [directory: tmp_dir]}]}
+          {SecretAgent,
+           secret_agent_config: [secrets: %{"secret_with_whitespaces" => [directory: tmp_dir]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret_with_whitespaces")
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "secret_with_whitespaces")
 
       assert wrapped_secret.() == String.trim(secret_with_whitespaces)
     end
@@ -221,14 +216,14 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [
+          {SecretAgent,
+           secret_agent_config: [
              secrets: %{"secret_with_whitespaces" => [directory: tmp_dir]},
              trim_secrets: false
            ]}
         )
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret_with_whitespaces")
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "secret_with_whitespaces")
 
       assert wrapped_secret.() == secret_with_whitespaces
     end
@@ -245,8 +240,8 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [
+          {SecretAgent,
+           secret_agent_config: [
              secrets: %{
                secret => [
                  directory: tmp_dir,
@@ -258,7 +253,7 @@ defmodule SecretsWatcherTest do
            ]}
         )
 
-      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+      %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
       # Callback should be called when the content has been modified
       File.write!(secret_path, "new_secret_content")
@@ -283,8 +278,8 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [
+          {SecretAgent,
+           secret_agent_config: [
              secrets: %{
                secret_1 => [
                  directory: tmp_dir_1,
@@ -302,7 +297,7 @@ defmodule SecretsWatcherTest do
            ]}
         )
 
-      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+      %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
       # Callback should be called when the content has been modified
       File.write!(secret_path_1, "new_secret_content_1")
@@ -321,16 +316,15 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [secrets: %{"some_secret" => [directory: tmp_dir]}]}
+          {SecretAgent, secret_agent_config: [secrets: %{"some_secret" => [directory: tmp_dir]}]}
         )
 
-      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+      %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
       File.write!(unwatched_secret_path, "dummy")
       send(pid, {:file_event, watcher_pid, {unwatched_secret_path, [:modified]}})
 
-      {:ok, some_wrapped_secret} = assert SecretsWatcher.get_secret(pid, "some_secret")
+      {:ok, some_wrapped_secret} = assert SecretAgent.get_secret(pid, "some_secret")
       assert some_wrapped_secret.() == nil
     end
 
@@ -340,37 +334,37 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
+          {SecretAgent,
+           secret_agent_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
         )
 
-      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+      %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
       assert wrapped_secret.() == "new_secret_content"
     end
   end
 
   describe "Set and erase secrets manually" do
     test "Success: can put a secret" do
-      pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
+      pid = start_supervised!({SecretAgent, secret_agent_config: [secrets: %{}]})
 
-      assert :ok = SecretsWatcher.put_secret(pid, "foo", fn -> "supersecret" end)
+      assert :ok = SecretAgent.put_secret(pid, "foo", fn -> "supersecret" end)
 
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "foo")
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "foo")
       assert wrapped_secret.() == "supersecret"
     end
 
     test "Success: can erase a manually added secret" do
-      pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
+      pid = start_supervised!({SecretAgent, secret_agent_config: [secrets: %{}]})
 
-      assert :ok = SecretsWatcher.put_secret(pid, "foo", fn -> "supersecret" end)
+      assert :ok = SecretAgent.put_secret(pid, "foo", fn -> "supersecret" end)
 
-      assert :ok = SecretsWatcher.erase_secret(pid, "foo")
-      assert {:ok, :erased} = SecretsWatcher.get_secret(pid, "foo")
+      assert :ok = SecretAgent.erase_secret(pid, "foo")
+      assert {:ok, :erased} = SecretAgent.get_secret(pid, "foo")
     end
 
     test "Success: can erase a watched secret" do
@@ -380,25 +374,25 @@ defmodule SecretsWatcherTest do
 
       pid =
         start_supervised!(
-          {SecretsWatcher, secrets_watcher_config: [secrets: %{secret => [directory: tmp_dir]}]}
+          {SecretAgent, secret_agent_config: [secrets: %{secret => [directory: tmp_dir]}]}
         )
 
-      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+      %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
-      assert :ok = SecretsWatcher.erase_secret(pid, secret)
-      assert {:ok, :erased} = SecretsWatcher.get_secret(pid, secret)
+      assert :ok = SecretAgent.erase_secret(pid, secret)
+      assert {:ok, :erased} = SecretAgent.get_secret(pid, secret)
 
       # A watched secret can be updated if its content changes on disk.
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
-      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
       assert wrapped_secret.() == "new_secret_content"
     end
 
     test "Success: nothing happens when deleting a non-existing secret" do
-      pid = start_supervised!({SecretsWatcher, secrets_watcher_config: [secrets: %{}]})
+      pid = start_supervised!({SecretAgent, secret_agent_config: [secrets: %{}]})
 
-      assert :ok = SecretsWatcher.erase_secret(pid, "non_existing_secret")
+      assert :ok = SecretAgent.erase_secret(pid, "non_existing_secret")
     end
   end
 
@@ -406,7 +400,7 @@ defmodule SecretsWatcherTest do
     test "Success: :file_event" do
       defmodule Handler do
         def handler(event, _measurements, _metadata, config) do
-          assert event == [:secrets_watcher, :file_event]
+          assert event == [:secret_agent, :file_event]
           send(config.parent, {config.ref, :file_event_emitted})
         end
       end
@@ -417,18 +411,18 @@ defmodule SecretsWatcherTest do
 
       :telemetry.attach(
         to_string(test_name),
-        [:secrets_watcher, :file_event],
+        [:secret_agent, :file_event],
         &Handler.handler/4,
         %{parent: parent, ref: ref}
       )
 
       pid =
         start_supervised!(
-          {SecretsWatcher,
-           secrets_watcher_config: [secrets: %{"dummy_secret" => [directory: "dummy_dir"]}]}
+          {SecretAgent,
+           secret_agent_config: [secrets: %{"dummy_secret" => [directory: "dummy_dir"]}]}
         )
 
-      %SecretsWatcher.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+      %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
       send(pid, {:file_event, watcher_pid, {"/dummy/path", [:modified]}})
 

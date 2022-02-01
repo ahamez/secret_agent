@@ -1,6 +1,6 @@
-# SecretsWatcher
+# SecretAgent 🕵️‍♂️
 
-![Elixir CI](https://github.com/ahamez/secrets_watcher/workflows/Elixir%20CI/badge.svg) [![Coverage Status](https://coveralls.io/repos/github/ahamez/secrets_watcher/badge.svg?branch=master)](https://coveralls.io/github/ahamez/secrets_watcher?branch=master) [![Hex Docs](https://img.shields.io/badge/hex-docs-brightgreen.svg)](https://hexdocs.pm/secrets_watcher/) [![Hex.pm Version](http://img.shields.io/hexpm/v/secrets_watcher.svg)](https://hex.pm/packages/secrets_watcher) [![License](https://img.shields.io/hexpm/l/secrets_watcher.svg)](https://github.com/ahamez/secrets_watcher/blob/master/LICENSE)
+![Elixir CI](https://github.com/ahamez/secret_agent/workflows/Elixir%20CI/badge.svg) [![Coverage Status](https://coveralls.io/repos/github/ahamez/secret_agent/badge.svg?branch=master)](https://coveralls.io/github/ahamez/secret_agent?branch=master) [![Hex Docs](https://img.shields.io/badge/hex-docs-brightgreen.svg)](https://hexdocs.pm/secret_agent/) [![Hex.pm Version](http://img.shields.io/hexpm/v/secret_agent.svg)](https://hex.pm/packages/secret_agent) [![License](https://img.shields.io/hexpm/l/secret_agent.svg)](https://github.com/ahamez/secret_agent/blob/master/LICENSE)
 
 An Elixir library to manage secrets, with the possibily to watch for their changes on filesystem.
 
@@ -14,7 +14,7 @@ As per the recommandation of the [EEF Security Workgroup](https://erlef.github.i
 ```elixir
 def deps do
   [
-    {:secrets_watcher, "~> 0.6"}
+    {:secret_agent, "~> 0.6"}
   ]
 end
 ```
@@ -41,35 +41,35 @@ end
 
     ℹ️ The `:value` option specifies the initial value of the secret (default to `nil` for in-memory secrets). Supersed the value from the file if the `:directory` option has been set.
 
-    👉 Only watched secrets should be configured at initialization time, you can add in-memory secrets dynamically with `SecretsWatcher.put_secret/3`.
+    👉 Only watched secrets should be configured at initialization time, you can add in-memory secrets dynamically with `SecretAgent.put_secret/3`.
 
 
-* Configure and add `secrets_watcher` to your supervision tree:
+* Configure and add `secret_agent` to your supervision tree:
     ```elixir
     children =
       [
-        {SecretsWatcher,
+        {SecretAgent,
          [
            name: :secrets,
-           secrets_watcher_config: [secrets: secrets]
+           secret_agent_config: [secrets: secrets]
          ]}
       ]
 
     opts = [strategy: :one_for_one, name: MyApp.Supervisor]
     Supervisor.start_link(children, opts)
     ```
-    ℹ️ If you don't specify the `:name` option, `SecretsWatcher` will be used by default.
+    ℹ️ If you don't specify the `:name` option, `SecretAgent` will be used by default.
 
-    👉 By default, `secrets_watcher` trim watched secrets read on disk with [`String.trim/1`](https://hexdocs.pm/elixir/1.13.2/String.html#trim/1). You can deactivate this behavior with the option `trim_secrets` set to `false`.
+    👉 By default, `secret_agent` trim watched secrets read on disk with [`String.trim/1`](https://hexdocs.pm/elixir/1.13.2/String.html#trim/1). You can deactivate this behavior with the option `trim_secrets` set to `false`.
 
-* Whenever you want to retrieve a secret, use `SecretsWatcher.get_secret/2`:
+* Whenever you want to retrieve a secret, use `SecretAgent.get_secret/2`:
     ```elixir
-    {:ok, wrapped_credentials} = SecretsWatcher.get_secret(:secrets, "aws-credentials.json")
+    {:ok, wrapped_credentials} = SecretAgent.get_secret(:secrets, "aws-credentials.json")
 
     secret = wrapped_credentials.()
     ```
 
-    👉 As a best practice, `secrets_watcher` erases secrets when accessing them. You can override this behavior with the option `erase: false`.
+    👉 As a best practice, `secret_agent` erases secrets when accessing them. You can override this behavior with the option `erase: false`.
 
 
-* You can manually update secrets with `SecretsWatcher.put_secret/3` and `SecretsWatcher.erase_secret/2`.
+* You can manually update secrets with `SecretAgent.put_secret/3` and `SecretAgent.erase_secret/2`.

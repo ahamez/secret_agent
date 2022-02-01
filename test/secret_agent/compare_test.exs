@@ -1,8 +1,8 @@
-defmodule SecretsWatcher.CompareTest do
+defmodule SecretAgent.CompareTest do
   use ExUnit.Case
 
-  import SecretsWatcher.Compare
-  doctest SecretsWatcher.Compare
+  import SecretAgent.Compare
+  doctest SecretAgent.Compare
 
   test "Success: empty binaries" do
     assert equal?("", "") == true

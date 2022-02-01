@@ -1,4 +1,4 @@
-defmodule SecretsWatcher do
+defmodule SecretAgent do
   @moduledoc """
   This module provides the possibility to manage secrets and to watch for directory changes.
 
@@ -36,7 +36,7 @@ defmodule SecretsWatcher do
 
   use GenServer
 
-  alias SecretsWatcher.Telemetry
+  alias SecretAgent.Telemetry
 
   defmodule State do
     @moduledoc false
@@ -56,12 +56,12 @@ defmodule SecretsWatcher do
   end
 
   @doc """
-  Start `secrets_watcher` as a linked process.
+  Start `secret_agent` as a linked process.
   """
   def start_link(opts) do
     Process.flag(:sensitive, true)
 
-    {secrets_opts, opts} = Keyword.pop!(opts, :secrets_watcher_config)
+    {secrets_opts, opts} = Keyword.pop!(opts, :secret_agent_config)
 
     with {:ok, secrets_opts} <- NimbleOptions.validate(secrets_opts, @options_definition) do
       server_opts = Keyword.take(opts, [:name])
@@ -243,7 +243,7 @@ defmodule SecretsWatcher do
         wrapped_previous_secret == :erased ->
           {:changed, secret_name, wrapped_new_secret}
 
-        SecretsWatcher.Compare.equal?(wrapped_previous_secret.(), wrapped_new_secret.()) ->
+        SecretAgent.Compare.equal?(wrapped_previous_secret.(), wrapped_new_secret.()) ->
           :ignore
 
         true ->
