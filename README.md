@@ -1,4 +1,4 @@
-# SecretAgent 🕵️‍♂️
+# SecretAgent 🕵️
 
 ![Elixir CI](https://github.com/ahamez/secret_agent/workflows/Elixir%20CI/badge.svg) [![Coverage Status](https://coveralls.io/repos/github/ahamez/secret_agent/badge.svg?branch=master)](https://coveralls.io/github/ahamez/secret_agent?branch=master) [![Hex Docs](https://img.shields.io/badge/hex-docs-brightgreen.svg)](https://hexdocs.pm/secret_agent/) [![Hex.pm Version](http://img.shields.io/hexpm/v/secret_agent.svg)](https://hex.pm/packages/secret_agent) [![License](https://img.shields.io/hexpm/l/secret_agent.svg)](https://github.com/ahamez/secret_agent/blob/master/LICENSE)
 
@@ -14,7 +14,7 @@ As per the recommandation of the [EEF Security Workgroup](https://erlef.github.i
 ```elixir
 def deps do
   [
-    {:secret_agent, "~> 0.6"}
+    {:secret_agent, "~> 0.7"}
   ]
 end
 ```

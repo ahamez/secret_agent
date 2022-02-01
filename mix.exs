@@ -4,7 +4,7 @@ defmodule SecretAgent.MixProject do
   def project do
     [
       app: :secret_agent,
-      version: "0.6.1",
+      version: "0.7.0",
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -39,7 +39,7 @@ defmodule SecretAgent.MixProject do
 
   defp description do
     """
-    An Elixir library to watch secrets in a directory
+    An Elixir library to manage secrets
     """
   end
 
