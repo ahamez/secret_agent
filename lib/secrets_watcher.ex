@@ -202,12 +202,12 @@ defmodule SecretsWatcher do
 
           directory ->
             Telemetry.event(:initial_loading, %{secret_name: secret_name, directory: directory})
-            secret_value = load_secret(directory, secret_name, trim_secrets)
+            wrapped_secret_value = load_secret(directory, secret_name, trim_secrets)
 
             init_callback = Keyword.get(secret_config, :init_callback)
-            init_callback.(secret_value)
+            init_callback.(wrapped_secret_value)
 
-            secret_value
+            wrapped_secret_value
 
           true ->
             fn -> nil end
