@@ -71,10 +71,14 @@ defmodule SecretsWatcher do
 
   @doc """
   Return the secret value (a closure or `:erased`) corresponding to `secret_name`.
+
+  As a best practice, the secret will be erased (as if called by `erase_secret/2`).
+  You can override this behavior with the option `erase: false`.
   """
-  @spec get_secret(pid() | atom(), binary()) :: {:ok, function() | :erased} | {:error, term()}
-  def get_secret(server, secret_name) when is_binary(secret_name) do
-    GenServer.call(server, {:get_secret, secret_name})
+  @spec get_secret(pid() | atom(), binary(), Keyword.t()) ::
+          {:ok, function() | :erased} | {:error, term()}
+  def get_secret(server, secret_name, opts \\ [erase: true]) when is_binary(secret_name) do
+    GenServer.call(server, {:get_secret, secret_name, opts})
   end
 
   @doc """
@@ -164,14 +168,23 @@ defmodule SecretsWatcher do
   end
 
   @impl true
-  def handle_call({:get_secret, secret_name}, _from, %State{} = state) do
-    response =
-      case Map.get(state.secrets, secret_name) do
-        nil -> {:error, :no_such_secret}
-        wrapped_secret_or_erased -> {:ok, wrapped_secret_or_erased}
-      end
+  def handle_call({:get_secret, secret_name, opts}, _from, %State{} = state) do
+    if Map.has_key?(state.secrets, secret_name) do
+      erase = Keyword.fetch!(opts, :erase)
 
-    {:reply, response, state}
+      {wrapped_secret_or_erased, secrets} =
+        Map.get_and_update(state.secrets, secret_name, fn current_value ->
+          if erase do
+            {current_value, _new_value = :erased}
+          else
+            {current_value, _new_value = current_value}
+          end
+        end)
+
+      {:reply, {:ok, wrapped_secret_or_erased}, %State{state | secrets: secrets}}
+    else
+      {:reply, {:error, :no_such_secret}, state}
+    end
   end
 
   @impl true

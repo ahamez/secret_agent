@@ -166,6 +166,33 @@ defmodule SecretsWatcherTest do
 
       assert_receive {^test_ref, ^secret, ^secret}
     end
+
+    test "Success: a secret is erased after having being accessed" do
+      pid =
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [secrets: %{"secret" => [value: "some_value"]}]}
+        )
+
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret")
+      assert wrapped_secret.() == "some_value"
+
+      assert {:ok, :erased} = SecretsWatcher.get_secret(pid, "secret")
+    end
+
+    test "Success: can override erasing a secret" do
+      pid =
+        start_supervised!(
+          {SecretsWatcher,
+           secrets_watcher_config: [secrets: %{"secret" => [value: "some_value"]}]}
+        )
+
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret", erase: false)
+      assert wrapped_secret.() == "some_value"
+
+      assert {:ok, wrapped_secret} = SecretsWatcher.get_secret(pid, "secret")
+      assert wrapped_secret.() == "some_value"
+    end
   end
 
   describe "Trim" do

@@ -64,10 +64,12 @@ end
 
 * Whenever you want to retrieve a secret, use `SecretsWatcher.get_secret/2`:
     ```elixir
-    {:ok, wrapped_credentials} =
-      SecretsWatcher.get_secret(:secrets, "aws-credentials.json")
+    {:ok, wrapped_credentials} = SecretsWatcher.get_secret(:secrets, "aws-credentials.json")
 
     secret = wrapped_credentials.()
     ```
+
+    👉 As a best practice, `secrets_watcher` erases secrets when accessing them. You can override this behavior with the option `erase: false`.
+
 
 * You can manually update secrets with `SecretsWatcher.put_secret/3` and `SecretsWatcher.erase_secret/2`.
