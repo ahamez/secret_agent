@@ -30,6 +30,7 @@ defmodule SecretsWatcher do
   @secret_config_options [
     directory: nil,
     value: nil,
+    init_callback: &DefaultCallback.no_op/1,
     callback: &DefaultCallback.no_op/1
   ]
 
@@ -202,8 +203,12 @@ defmodule SecretsWatcher do
 
           directory ->
             Telemetry.event(:initial_loading, %{secret_name: secret_name, directory: directory})
-            load_secret(directory, secret_name, trim_secrets)
+            secret_value = load_secret(directory, secret_name, trim_secrets)
 
+            init_callback = Keyword.get(secret_config, :init_callback)
+            init_callback.(secret_value)
+
+            secret_value
 
           true ->
             fn -> nil end

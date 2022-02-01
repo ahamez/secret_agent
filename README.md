@@ -28,11 +28,14 @@ end
         "aws-credentials.json" => [value: "super-secret"],
         "secret.txt" => [
           directory: "path/to/secrets/directory",
+          init_callback: fn wrapped_secret-> do_something_with_secret(wrapped_secret) end,
           callback: fn wrapped_secret-> do_something_with_secret(wrapped_secret) end
         ]
       }
     ```
     ℹ️ When using the `:directory` option, the name of the secret is the name of the file to watch in the directory. The secret will be loaded from the file upon startup. It this option is not set, the secret is considered to be an in-memory secret.
+
+    ℹ️ The `:init_callback` option specifies a callback that will be invoked the first time the watched secret is read from disk. Default to a function with no effect.
 
     ℹ️ The `:callback` option specifies a callback that will be invoked each time the watched secret has been updated on disk. Default to a function with no effect.
 

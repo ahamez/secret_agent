@@ -141,6 +141,31 @@ defmodule SecretsWatcherTest do
 
       assert wrapped_secret.() == "initial"
     end
+
+    test "Success: launch init_callback when reading file for the first time" do
+      tmp_dir = mk_tmp_random_dir()
+
+      {_secret_path, secret} = mk_random_secret(tmp_dir)
+
+      test_pid = self()
+      test_ref = make_ref()
+
+      start_supervised!(
+        {SecretsWatcher,
+         secrets_watcher_config: [
+           secrets: %{
+             secret => [
+               directory: tmp_dir,
+               init_callback: fn wrapped_secret ->
+                 send(test_pid, {test_ref, secret, wrapped_secret.()})
+               end
+             ]
+           }
+         ]}
+      )
+
+      assert_receive {^test_ref, ^secret, ^secret}
+    end
   end
 
   describe "Trim" do
