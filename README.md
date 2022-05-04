@@ -21,15 +21,18 @@ end
 
 ## Usage
 
-* Establish the list of secrets:
+1. Establish the list of initial secrets:
     ```elixir
     secrets =
       %{
-        "aws-credentials.json" => [value: "super-secret"],
+        "credentials" => [value: "super-secret"],
         "secret.txt" => [
           directory: "path/to/secrets/directory",
           init_callback: fn wrapped_secret-> do_something_with_secret(wrapped_secret) end,
           callback: fn wrapped_secret-> do_something_with_secret(wrapped_secret) end
+        ],
+        "sub/path/secret.txt" => [
+          directory: "path/to/secrets/directory"
         ]
       }
     ```
@@ -41,7 +44,7 @@ end
 
     ℹ️ The `:value` option specifies the initial value of the secret (default to `nil` for in-memory secrets). Supersed the value from the file if the `:directory` option has been set.
 
-    👉 Only watched secrets should be configured at initialization time, you can add in-memory secrets dynamically with `SecretAgent.put_secret/3`.
+    👉 You can add in-memory secrets dynamically with `SecretAgent.put_secret/3`.
 
 
 * Configure and add `secret_agent` to your supervision tree:
@@ -64,8 +67,7 @@ end
 
 * Whenever you want to retrieve a secret, use `SecretAgent.get_secret/2`:
     ```elixir
-    {:ok, wrapped_credentials} = SecretAgent.get_secret(:secrets, "aws-credentials.json")
-
+    {:ok, wrapped_credentials} = SecretAgent.get_secret(:secrets, "credentials")
     secret = wrapped_credentials.()
     ```
 
