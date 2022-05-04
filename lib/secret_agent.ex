@@ -42,6 +42,7 @@ defmodule SecretAgent do
     @moduledoc false
     defstruct callbacks: %{},
               directory: nil,
+              paths_to_secrets: %{},
               secrets: %{},
               task_supervisor_pid: nil,
               trim_secrets: true,
@@ -112,6 +113,7 @@ defmodule SecretAgent do
     with {:ok, secrets} <- validate_secrets_config(secrets),
          directories = get_directories(secrets),
          callbacks = get_callbacks(secrets),
+         {:ok, paths_to_secrets} <- get_paths_to_secrets(secrets),
          {:ok, task_supervisor_pid} <- Task.Supervisor.start_link(),
          {:ok, watcher_pid} <- SecretsWatcherFileSystem.start_link(dirs: directories),
          :ok <- SecretsWatcherFileSystem.subscribe(watcher_pid) do
@@ -119,6 +121,7 @@ defmodule SecretAgent do
         :ok,
         %State{
           callbacks: callbacks,
+          paths_to_secrets: paths_to_secrets,
           secrets: load_initial_secrets(secrets, trim_secrets),
           task_supervisor_pid: task_supervisor_pid,
           watcher_pid: watcher_pid,
@@ -134,7 +137,13 @@ defmodule SecretAgent do
   def handle_info({:file_event, pid, {path, events}}, %State{watcher_pid: pid} = state) do
     Telemetry.event(:file_event, %{events: events, path: path})
 
-    case load_updated_secret(state.secrets, events, path, state.trim_secrets) do
+    case load_updated_secret(
+           state.secrets,
+           events,
+           path,
+           state.trim_secrets,
+           state.paths_to_secrets
+         ) do
       :ignore ->
         {:noreply, state}
 
@@ -230,15 +239,16 @@ defmodule SecretAgent do
     end)
   end
 
-  defp load_updated_secret(secrets, events, path, trim_secret) do
-    if contains_watched_events?(events) and is_file?(path) do
-      {secret_name, wrapped_new_secret} = load_secret_from_path(path, trim_secret)
+  defp load_updated_secret(secrets, events, path, trim_secret, paths_to_secrets) do
+    secret_name = Map.get(paths_to_secrets, path)
+
+    if secret_name != nil and contains_watched_events?(events) and is_file?(path) do
+      wrapped_new_secret = load_secret_from_path(path, trim_secret)
       wrapped_previous_secret = Map.get(secrets, secret_name)
 
       cond do
-        # `secret_name` is not in `secrets`, we can ignore it.
         wrapped_previous_secret == nil ->
-          :ignore
+          raise "Path #{path} doesn't correspond to any secret"
 
         wrapped_previous_secret == :erased ->
           {:changed, secret_name, wrapped_new_secret}
@@ -271,14 +281,10 @@ defmodule SecretAgent do
 
   defp load_secret(dir, secret_name, trim_secret) do
     abs_path = Path.join(dir, secret_name)
-    {^secret_name, wrapped_secret} = load_secret_from_path(abs_path, trim_secret)
-
-    wrapped_secret
+    load_secret_from_path(abs_path, trim_secret)
   end
 
   defp load_secret_from_path(path, trim_secret) do
-    secret_name = Path.basename(path)
-
     case File.read(path) do
       {:ok, secret} ->
         secret =
@@ -288,10 +294,10 @@ defmodule SecretAgent do
             secret
           end
 
-        {secret_name, fn -> secret end}
+        fn -> secret end
 
       {:error, _} ->
-        {secret_name, fn -> nil end}
+        fn -> nil end
     end
   end
 
@@ -310,6 +316,7 @@ defmodule SecretAgent do
   defp get_directories(secrets) when is_map(secrets) do
     Enum.reduce(secrets, [], fn {_secret_name, secret_config}, acc ->
       case Keyword.get(secret_config, :directory) do
+        # In-memory secret
         nil ->
           acc
 
@@ -326,6 +333,30 @@ defmodule SecretAgent do
   defp get_callbacks(secrets) when is_map(secrets) do
     Map.new(secrets, fn {secret_name, secret_config} ->
       {secret_name, Keyword.fetch!(secret_config, :callback)}
+    end)
+  end
+
+  defp get_paths_to_secrets(secrets) when is_map(secrets) do
+    Enum.reduce_while(secrets, {:ok, %{}}, fn {secret_name, secret_config}, {:ok, acc} ->
+      case Keyword.get(secret_config, :directory) do
+        # In-memory secret
+        nil ->
+          {:cont, {:ok, acc}}
+
+        directory ->
+          path = Path.join(directory, secret_name)
+
+          {status, acc} =
+            Map.get_and_update(acc, path, fn
+              nil -> {nil, secret_name}
+              _already_exist -> {:secrets_with_same_path, :dummy}
+            end)
+
+          case status do
+            :secrets_with_same_path -> {:halt, {:error, {:secrets_with_same_path, path}}}
+            _ -> {:cont, {:ok, acc}}
+          end
+      end
     end)
   end
 end

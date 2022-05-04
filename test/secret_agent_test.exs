@@ -28,6 +28,22 @@ defmodule SecretAgentTest do
                   ]}
                )
     end
+
+    @tag :tmp_dir
+    test "Failure: two secrets have the same path", %{tmp_dir: tmp_dir} do
+      full_path = Path.join([tmp_dir, "foo", "secret_name"])
+
+      assert {:error, {{:secrets_with_same_path, ^full_path}, _}} =
+               start_supervised(
+                 {SecretAgent,
+                  secret_agent_config: [
+                    secrets: %{
+                      "secret_name" => [directory: Path.join(tmp_dir, "foo")],
+                      "foo/secret_name" => [directory: tmp_dir]
+                    }
+                  ]}
+               )
+    end
   end
 
   describe "Secrets management" do
@@ -193,6 +209,20 @@ defmodule SecretAgentTest do
       assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, "secret")
       assert wrapped_secret.() == "some_value"
     end
+
+    @tag :tmp_dir
+    test "Success: a secret name is a subpath", %{tmp_dir: tmp_dir} do
+      secret_name = "foo/secret"
+      {_path, ^secret_name, secret_content} = mk_random_secret(tmp_dir, secret_name: secret_name)
+
+      pid =
+        start_supervised!(
+          {SecretAgent, secret_agent_config: [secrets: %{secret_name => [directory: tmp_dir]}]}
+        )
+
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret_name)
+      assert wrapped_secret.() == secret_content
+    end
   end
 
   describe "Trim" do
@@ -357,6 +387,44 @@ defmodule SecretAgentTest do
 
       assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret_name)
       assert wrapped_secret.() == "new_secret_content"
+    end
+
+    @tag :tmp_dir
+    test "Success: a secret name is a subpath", %{tmp_dir: tmp_dir} do
+      secret_name = "foo/secret"
+
+      {secret_path, ^secret_name, _secret_content} =
+        mk_random_secret(tmp_dir, secret_name: secret_name)
+
+      test_pid = self()
+      test_ref = make_ref()
+
+      pid =
+        start_supervised!(
+          {SecretAgent,
+           secret_agent_config: [
+             secrets: %{
+               secret_name => [
+                 directory: tmp_dir,
+                 callback: fn wrapped_secret ->
+                   send(test_pid, {test_ref, secret_name, wrapped_secret.()})
+                 end
+               ]
+             }
+           ]}
+        )
+
+      %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+
+      # Callback should be called when the content has been modified
+      File.write!(secret_path, "new_secret_content")
+      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
+      assert_receive {^test_ref, ^secret_name, "new_secret_content"}
+
+      # Callback should not be called when the content hasn't been modified
+      File.write!(secret_path, "new_secret_content")
+      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
+      refute_receive {^test_ref, ^secret_name, "new_secret_content"}
     end
   end
 
