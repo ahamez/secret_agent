@@ -46,53 +46,56 @@ defmodule SecretAgentTest do
 
     test "Success: read secret from initial file, secret having a callback" do
       tmp_dir = mk_tmp_random_dir()
-      {_path, secret} = mk_random_secret(tmp_dir)
+      {_path, secret_name, secret_content} = mk_random_secret(tmp_dir)
 
       pid =
         start_supervised!(
           {SecretAgent,
            secret_agent_config: [
-             secrets: %{secret => [callback: fn _ -> :dummy end, directory: tmp_dir]}
+             secrets: %{secret_name => [callback: fn _ -> :dummy end, directory: tmp_dir]}
            ]}
         )
 
-      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
-      assert wrapped_secret.() == secret
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret_name)
+      assert wrapped_secret.() == secret_content
     end
 
     test "Success: read secret from initial file, secret having no callback" do
       tmp_dir = mk_tmp_random_dir()
-      {_path, secret} = mk_random_secret(tmp_dir)
+      {_path, secret_name, secret_content} = mk_random_secret(tmp_dir)
 
       pid =
         start_supervised!(
-          {SecretAgent, secret_agent_config: [secrets: %{secret => [directory: tmp_dir]}]}
+          {SecretAgent, secret_agent_config: [secrets: %{secret_name => [directory: tmp_dir]}]}
         )
 
-      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
-      assert wrapped_secret.() == secret
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret_name)
+      assert wrapped_secret.() == secret_content
     end
 
     test "Success: read secrets from multiple directories" do
       tmp_dir_1 = mk_tmp_random_dir()
       tmp_dir_2 = mk_tmp_random_dir()
 
-      {_path, secret_1} = mk_random_secret(tmp_dir_1)
-      {_path, secret_2} = mk_random_secret(tmp_dir_2)
+      {_path, secret_1_name, secret_1_content} = mk_random_secret(tmp_dir_1)
+      {_path, secret_2_name, secret_2_content} = mk_random_secret(tmp_dir_2)
 
       pid =
         start_supervised!(
           {SecretAgent,
            secret_agent_config: [
-             secrets: %{secret_1 => [directory: tmp_dir_1], secret_2 => [directory: tmp_dir_2]}
+             secrets: %{
+               secret_1_name => [directory: tmp_dir_1],
+               secret_2_name => [directory: tmp_dir_2]
+             }
            ]}
         )
 
-      assert {:ok, wrapped_secret_1} = SecretAgent.get_secret(pid, secret_1)
-      assert wrapped_secret_1.() == secret_1
+      assert {:ok, wrapped_secret_1} = SecretAgent.get_secret(pid, secret_1_name)
+      assert wrapped_secret_1.() == secret_1_content
 
-      assert {:ok, wrapped_secret_2} = SecretAgent.get_secret(pid, secret_2)
-      assert wrapped_secret_2.() == secret_2
+      assert {:ok, wrapped_secret_2} = SecretAgent.get_secret(pid, secret_2_name)
+      assert wrapped_secret_2.() == secret_2_content
     end
 
     test "Failure: accessing a non-existing secret returns an error" do
@@ -126,15 +129,17 @@ defmodule SecretAgentTest do
 
     test "Success: initial value supersed file value" do
       tmp_dir = mk_tmp_random_dir()
-      {_path, secret} = mk_random_secret(tmp_dir)
+      {_path, secret_name, _secret_content} = mk_random_secret(tmp_dir)
 
       pid =
         start_supervised!(
           {SecretAgent,
-           secret_agent_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
+           secret_agent_config: [
+             secrets: %{secret_name => [directory: tmp_dir, value: "initial"]}
+           ]}
         )
 
-      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret_name)
 
       assert wrapped_secret.() == "initial"
     end
@@ -142,7 +147,7 @@ defmodule SecretAgentTest do
     test "Success: launch init_callback when reading file for the first time" do
       tmp_dir = mk_tmp_random_dir()
 
-      {_secret_path, secret} = mk_random_secret(tmp_dir)
+      {_secret_path, secret_name, secret_content} = mk_random_secret(tmp_dir)
 
       test_pid = self()
       test_ref = make_ref()
@@ -151,17 +156,17 @@ defmodule SecretAgentTest do
         {SecretAgent,
          secret_agent_config: [
            secrets: %{
-             secret => [
+             secret_name => [
                directory: tmp_dir,
                init_callback: fn wrapped_secret ->
-                 send(test_pid, {test_ref, secret, wrapped_secret.()})
+                 send(test_pid, {test_ref, secret_name, wrapped_secret.()})
                end
              ]
            }
          ]}
       )
 
-      assert_receive {^test_ref, ^secret, ^secret}
+      assert_receive {^test_ref, ^secret_name, ^secret_content}
     end
 
     test "Success: a secret is erased after having being accessed" do
@@ -233,7 +238,7 @@ defmodule SecretAgentTest do
     test "Success: callback is invoked upon secret rotation" do
       tmp_dir = mk_tmp_random_dir()
 
-      {secret_path, secret} = mk_random_secret(tmp_dir)
+      {secret_path, secret_name, _secret_content} = mk_random_secret(tmp_dir)
 
       test_pid = self()
       test_ref = make_ref()
@@ -243,10 +248,10 @@ defmodule SecretAgentTest do
           {SecretAgent,
            secret_agent_config: [
              secrets: %{
-               secret => [
+               secret_name => [
                  directory: tmp_dir,
                  callback: fn wrapped_secret ->
-                   send(test_pid, {test_ref, secret, wrapped_secret.()})
+                   send(test_pid, {test_ref, secret_name, wrapped_secret.()})
                  end
                ]
              }
@@ -258,20 +263,20 @@ defmodule SecretAgentTest do
       # Callback should be called when the content has been modified
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
-      assert_receive {^test_ref, ^secret, "new_secret_content"}
+      assert_receive {^test_ref, ^secret_name, "new_secret_content"}
 
       # Callback should not be called when the content hasn't been modified
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
-      refute_receive {^test_ref, ^secret, "new_secret_content"}
+      refute_receive {^test_ref, ^secret_name, "new_secret_content"}
     end
 
     test "Success: callbacks are invoked upon secret rotation in multiple directories" do
       tmp_dir_1 = mk_tmp_random_dir()
       tmp_dir_2 = mk_tmp_random_dir()
 
-      {secret_path_1, secret_1} = mk_random_secret(tmp_dir_1)
-      {secret_path_2, secret_2} = mk_random_secret(tmp_dir_2)
+      {secret_path_1, secret_1_name, _secret_1_content} = mk_random_secret(tmp_dir_1)
+      {secret_path_2, secret_2_name, _secret_2_content} = mk_random_secret(tmp_dir_2)
 
       test_pid = self()
       test_ref = make_ref()
@@ -281,16 +286,16 @@ defmodule SecretAgentTest do
           {SecretAgent,
            secret_agent_config: [
              secrets: %{
-               secret_1 => [
+               secret_1_name => [
                  directory: tmp_dir_1,
                  callback: fn wrapped_secret_1 ->
-                   send(test_pid, {test_ref, secret_1, wrapped_secret_1.()})
+                   send(test_pid, {test_ref, secret_1_name, wrapped_secret_1.()})
                  end
                ],
-               secret_2 => [
+               secret_2_name => [
                  directory: tmp_dir_2,
                  callback: fn wrapped_secret_2 ->
-                   send(test_pid, {test_ref, secret_2, wrapped_secret_2.()})
+                   send(test_pid, {test_ref, secret_2_name, wrapped_secret_2.()})
                  end
                ]
              }
@@ -302,12 +307,12 @@ defmodule SecretAgentTest do
       # Callback should be called when the content has been modified
       File.write!(secret_path_1, "new_secret_content_1")
       send(pid, {:file_event, watcher_pid, {secret_path_1, [:modified]}})
-      assert_receive {^test_ref, ^secret_1, "new_secret_content_1"}
+      assert_receive {^test_ref, ^secret_1_name, "new_secret_content_1"}
 
       # Callback should be called when the content has been modified
       File.write!(secret_path_2, "new_secret_content_2")
       send(pid, {:file_event, watcher_pid, {secret_path_2, [:modified]}})
-      assert_receive {^test_ref, ^secret_2, "new_secret_content_2"}
+      assert_receive {^test_ref, ^secret_2_name, "new_secret_content_2"}
     end
 
     test "Success: updating a file that is not a watched secret doesn't update a watched secret" do
@@ -330,12 +335,14 @@ defmodule SecretAgentTest do
 
     test "Success: watched secret with initial value can be updated from disk" do
       tmp_dir = mk_tmp_random_dir()
-      {secret_path, secret} = mk_random_secret(tmp_dir)
+      {secret_path, secret_name, _secret_content} = mk_random_secret(tmp_dir)
 
       pid =
         start_supervised!(
           {SecretAgent,
-           secret_agent_config: [secrets: %{secret => [directory: tmp_dir, value: "initial"]}]}
+           secret_agent_config: [
+             secrets: %{secret_name => [directory: tmp_dir, value: "initial"]}
+           ]}
         )
 
       %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
@@ -343,7 +350,7 @@ defmodule SecretAgentTest do
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
 
-      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret_name)
       assert wrapped_secret.() == "new_secret_content"
     end
   end
@@ -370,22 +377,22 @@ defmodule SecretAgentTest do
     test "Success: can erase a watched secret" do
       tmp_dir = mk_tmp_random_dir()
 
-      {secret_path, secret} = mk_random_secret(tmp_dir)
+      {secret_path, secret_name, _secret_content} = mk_random_secret(tmp_dir)
 
       pid =
         start_supervised!(
-          {SecretAgent, secret_agent_config: [secrets: %{secret => [directory: tmp_dir]}]}
+          {SecretAgent, secret_agent_config: [secrets: %{secret_name => [directory: tmp_dir]}]}
         )
 
       %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
 
-      assert :ok = SecretAgent.erase_secret(pid, secret)
-      assert {:ok, :erased} = SecretAgent.get_secret(pid, secret)
+      assert :ok = SecretAgent.erase_secret(pid, secret_name)
+      assert {:ok, :erased} = SecretAgent.get_secret(pid, secret_name)
 
       # A watched secret can be updated if its content changes on disk.
       File.write!(secret_path, "new_secret_content")
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
-      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret)
+      assert {:ok, wrapped_secret} = SecretAgent.get_secret(pid, secret_name)
       assert wrapped_secret.() == "new_secret_content"
     end
 
@@ -441,10 +448,15 @@ defmodule SecretAgentTest do
   end
 
   defp mk_random_secret(directory) do
-    random_secret = "#{Enum.take_random(?a..?z, 16)}"
-    path = Path.join(directory, random_secret)
-    File.write!(path, random_secret)
+    secret_content = "#{Enum.take_random(?a..?z, 16)}"
+    secret_name = secret_content
 
-    {path, random_secret}
+    full_path = Path.join(directory, secret_name)
+
+    :ok = full_path |> Path.dirname() |> File.mkdir_p!()
+
+    File.write!(full_path, secret_content)
+
+    {full_path, secret_name, secret_content}
   end
 end
