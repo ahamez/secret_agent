@@ -44,8 +44,8 @@ defmodule SecretAgentTest do
       assert wrapped_secret.() == nil
     end
 
-    test "Success: read secret from initial file, secret having a callback" do
-      tmp_dir = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: read secret from initial file, secret having a callback", %{tmp_dir: tmp_dir} do
       {_path, secret_name, secret_content} = mk_random_secret(tmp_dir)
 
       pid =
@@ -60,8 +60,8 @@ defmodule SecretAgentTest do
       assert wrapped_secret.() == secret_content
     end
 
-    test "Success: read secret from initial file, secret having no callback" do
-      tmp_dir = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: read secret from initial file, secret having no callback", %{tmp_dir: tmp_dir} do
       {_path, secret_name, secret_content} = mk_random_secret(tmp_dir)
 
       pid =
@@ -73,9 +73,10 @@ defmodule SecretAgentTest do
       assert wrapped_secret.() == secret_content
     end
 
-    test "Success: read secrets from multiple directories" do
-      tmp_dir_1 = mk_tmp_random_dir()
-      tmp_dir_2 = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: read secrets from multiple directories", %{tmp_dir: tmp_dir} do
+      tmp_dir_1 = mk_dir(tmp_dir, "1")
+      tmp_dir_2 = mk_dir(tmp_dir, "2")
 
       {_path, secret_1_name, secret_1_content} = mk_random_secret(tmp_dir_1)
       {_path, secret_2_name, secret_2_content} = mk_random_secret(tmp_dir_2)
@@ -127,8 +128,8 @@ defmodule SecretAgentTest do
       assert wrapped_secret.() == nil
     end
 
-    test "Success: initial value supersed file value" do
-      tmp_dir = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: initial value supersed file value", %{tmp_dir: tmp_dir} do
       {_path, secret_name, _secret_content} = mk_random_secret(tmp_dir)
 
       pid =
@@ -144,9 +145,8 @@ defmodule SecretAgentTest do
       assert wrapped_secret.() == "initial"
     end
 
-    test "Success: launch init_callback when reading file for the first time" do
-      tmp_dir = mk_tmp_random_dir()
-
+    @tag :tmp_dir
+    test "Success: launch init_callback when reading file for the first time", %{tmp_dir: tmp_dir} do
       {_secret_path, secret_name, secret_content} = mk_random_secret(tmp_dir)
 
       test_pid = self()
@@ -196,8 +196,8 @@ defmodule SecretAgentTest do
   end
 
   describe "Trim" do
-    test "Success: trim activated by default" do
-      tmp_dir = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: trim activated by default", %{tmp_dir: tmp_dir} do
       secret_with_whitespaces = "   \nsecret\n  \n"
       path = Path.join(tmp_dir, "secret_with_whitespaces")
       File.write!(path, secret_with_whitespaces)
@@ -213,8 +213,8 @@ defmodule SecretAgentTest do
       assert wrapped_secret.() == String.trim(secret_with_whitespaces)
     end
 
-    test "Success: trim deactivated" do
-      tmp_dir = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: trim deactivated", %{tmp_dir: tmp_dir} do
       secret_with_whitespaces = "   \nsecret\n  \n"
       path = Path.join(tmp_dir, "secret_with_whitespaces")
       File.write!(path, secret_with_whitespaces)
@@ -235,9 +235,8 @@ defmodule SecretAgentTest do
   end
 
   describe "Secrets rotation" do
-    test "Success: callback is invoked upon secret rotation" do
-      tmp_dir = mk_tmp_random_dir()
-
+    @tag :tmp_dir
+    test "Success: callback is invoked upon secret rotation", %{tmp_dir: tmp_dir} do
       {secret_path, secret_name, _secret_content} = mk_random_secret(tmp_dir)
 
       test_pid = self()
@@ -271,9 +270,12 @@ defmodule SecretAgentTest do
       refute_receive {^test_ref, ^secret_name, "new_secret_content"}
     end
 
-    test "Success: callbacks are invoked upon secret rotation in multiple directories" do
-      tmp_dir_1 = mk_tmp_random_dir()
-      tmp_dir_2 = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: callbacks are invoked upon secret rotation in multiple directories", %{
+      tmp_dir: tmp_dir
+    } do
+      tmp_dir_1 = mk_dir(tmp_dir, "1")
+      tmp_dir_2 = mk_dir(tmp_dir, "2")
 
       {secret_path_1, secret_1_name, _secret_1_content} = mk_random_secret(tmp_dir_1)
       {secret_path_2, secret_2_name, _secret_2_content} = mk_random_secret(tmp_dir_2)
@@ -315,8 +317,9 @@ defmodule SecretAgentTest do
       assert_receive {^test_ref, ^secret_2_name, "new_secret_content_2"}
     end
 
-    test "Success: updating a file that is not a watched secret doesn't update a watched secret" do
-      tmp_dir = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: updating a file that is not a watched secret doesn't update a watched secret",
+         %{tmp_dir: tmp_dir} do
       unwatched_secret_path = Path.join(tmp_dir, "unwatched_secret")
 
       pid =
@@ -333,8 +336,10 @@ defmodule SecretAgentTest do
       assert some_wrapped_secret.() == nil
     end
 
-    test "Success: watched secret with initial value can be updated from disk" do
-      tmp_dir = mk_tmp_random_dir()
+    @tag :tmp_dir
+    test "Success: watched secret with initial value can be updated from disk", %{
+      tmp_dir: tmp_dir
+    } do
       {secret_path, secret_name, _secret_content} = mk_random_secret(tmp_dir)
 
       pid =
@@ -374,9 +379,8 @@ defmodule SecretAgentTest do
       assert {:ok, :erased} = SecretAgent.get_secret(pid, "foo")
     end
 
-    test "Success: can erase a watched secret" do
-      tmp_dir = mk_tmp_random_dir()
-
+    @tag :tmp_dir
+    test "Success: can erase a watched secret", %{tmp_dir: tmp_dir} do
       {secret_path, secret_name, _secret_content} = mk_random_secret(tmp_dir)
 
       pid =
@@ -439,17 +443,16 @@ defmodule SecretAgentTest do
 
   # -- Helper functions
 
-  defp mk_tmp_random_dir() do
-    random_name = "#{Enum.take_random(?a..?z, 16)}"
-    path = Path.join(System.tmp_dir!(), random_name)
+  defp mk_dir(basedir, name) do
+    path = Path.join(basedir, name)
     File.mkdir_p!(path)
 
     path
   end
 
-  defp mk_random_secret(directory) do
+  defp mk_random_secret(directory, opts \\ []) do
     secret_content = "#{Enum.take_random(?a..?z, 16)}"
-    secret_name = secret_content
+    secret_name = Keyword.get(opts, :secret_name, secret_content)
 
     full_path = Path.join(directory, secret_name)
 
