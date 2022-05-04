@@ -14,7 +14,7 @@ As per the recommandation of the [EEF Security Workgroup](https://erlef.github.i
 ```elixir
 def deps do
   [
-    {:secret_agent, "~> 0.7"}
+    {:secret_agent, "~> 0.8"}
   ]
 end
 ```
