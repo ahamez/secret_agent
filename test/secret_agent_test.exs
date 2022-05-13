@@ -426,6 +426,45 @@ defmodule SecretAgentTest do
       send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
       refute_receive {^test_ref, ^secret_name, "new_secret_content"}
     end
+
+    @tag :tmp_dir
+    test "Success: a secret directory is a relative path", %{tmp_dir: tmp_dir} do
+      relative_path = Path.join([".", "tmp", "SecretAgentTest", Path.basename(tmp_dir)])
+      secret_name = "foo"
+
+      {secret_path, ^secret_name, _secret_content} =
+        mk_random_secret(tmp_dir, secret_name: secret_name)
+
+      test_pid = self()
+      test_ref = make_ref()
+
+      pid =
+        start_supervised!(
+          {SecretAgent,
+           secret_agent_config: [
+             secrets: %{
+               secret_name => [
+                 directory: relative_path,
+                 callback: fn wrapped_secret ->
+                   send(test_pid, {test_ref, secret_name, wrapped_secret.()})
+                 end
+               ]
+             }
+           ]}
+        )
+
+      %SecretAgent.State{watcher_pid: watcher_pid} = :sys.get_state(pid)
+
+      # Callback should be called when the content has been modified
+      File.write!(secret_path, "new_secret_content")
+      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
+      assert_receive {^test_ref, ^secret_name, "new_secret_content"}
+
+      # Callback should not be called when the content hasn't been modified
+      File.write!(secret_path, "new_secret_content")
+      send(pid, {:file_event, watcher_pid, {secret_path, [:modified]}})
+      refute_receive {^test_ref, ^secret_name, "new_secret_content"}
+    end
   end
 
   describe "Set and erase secrets manually" do

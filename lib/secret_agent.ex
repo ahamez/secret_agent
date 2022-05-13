@@ -344,7 +344,7 @@ defmodule SecretAgent do
           {:cont, {:ok, acc}}
 
         directory ->
-          path = Path.join(directory, secret_name)
+          path = Path.join(directory, secret_name) |> Path.expand()
 
           {status, acc} =
             Map.get_and_update(acc, path, fn
