@@ -4,7 +4,7 @@ defmodule SecretAgent.MixProject do
   def project do
     [
       app: :secret_agent,
-      version: "0.8.1",
+      version: "0.8.2",
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
