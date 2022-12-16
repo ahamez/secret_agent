@@ -4,7 +4,7 @@ defmodule SecretAgent.Compare do
   avoid timing attacks.
   """
 
-  use Bitwise
+  import Bitwise
 
   @doc """
   Compares `lhs` and `rhs` binaries in constant time.
