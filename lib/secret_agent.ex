@@ -115,8 +115,8 @@ defmodule SecretAgent do
          callbacks = get_callbacks(secrets),
          {:ok, paths_to_secrets} <- get_paths_to_secrets(secrets),
          {:ok, task_supervisor_pid} <- Task.Supervisor.start_link(),
-         {:ok, watcher_pid} <- SecretsWatcherFileSystem.start_link(dirs: directories),
-         :ok <- SecretsWatcherFileSystem.subscribe(watcher_pid) do
+         {:ok, watcher_pid} <- FileSystem.start_link(dirs: directories),
+         :ok <- FileSystem.subscribe(watcher_pid) do
       {
         :ok,
         %State{
