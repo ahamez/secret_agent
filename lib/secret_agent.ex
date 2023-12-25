@@ -242,7 +242,7 @@ defmodule SecretAgent do
   defp load_updated_secret(secrets, events, path, trim_secret, paths_to_secrets) do
     secret_name = Map.get(paths_to_secrets, path)
 
-    if secret_name != nil and contains_watched_events?(events) and is_file?(path) do
+    if secret_name != nil and contains_watched_events?(events) and file?(path) do
       wrapped_new_secret = load_secret_from_path(path, trim_secret)
       wrapped_previous_secret = Map.get(secrets, secret_name)
 
@@ -275,7 +275,7 @@ defmodule SecretAgent do
     end)
   end
 
-  defp is_file?(path) do
+  defp file?(path) do
     File.exists?(path) and not File.dir?(path)
   end
 
