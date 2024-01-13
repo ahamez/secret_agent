@@ -30,7 +30,6 @@ defmodule SecretAgent.MixProject do
       {:excoveralls, "~> 0.18", only: [:test], runtime: false},
       {:ex_doc, "~> 0.22", only: [:dev], runtime: false},
       {:file_system, "~> 1.0"},
-      {:git_hooks, "~> 0.5", only: [:test, :dev], runtime: false},
       {:nimble_options, "~> 1.1"},
       {:telemetry, "~> 1.0"}
     ]
