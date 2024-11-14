@@ -6,86 +6,79 @@ env:
 
 on:
   push:
-    branches: [ master ]
+    branches: ["**"]
   pull_request:
-    branches: [ master ]
+    branches: ["**"]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     name: OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - elixir: 1.13.4
-            otp: 25.2
-            check_deps: true
+          - elixir: "1.14"
+            otp: "25"
+          - elixir: "1.15"
+            otp: "26"
+          - elixir: "1.16"
+            otp: "26"
+          - elixir: "1.17"
+            otp: "27"
             check_format: true
-            credo: true
-            dialyzer: true
-          - elixir: 1.14.2
-            otp: 25.2
             check_deps: true
-            check_format: true
-            credo: true
-            dialyzer: true
-          - elixir: 1.15.7
-            otp: 26.1.2
-            check_deps: true
-            check_format: true
             credo: true
             dialyzer: true
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install inotify-tools
-      run: sudo apt-get install -y inotify-tools
+      - name: Install inotify-tools
+        run: sudo apt-get install -y inotify-tools
 
-    - name: Set up Elixir
-      uses: erlef/setup-elixir@v1
-      with:
-        elixir-version: ${{matrix.elixir}}
-        otp-version: ${{matrix.otp}}
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{matrix.elixir}}
+          otp-version: ${{matrix.otp}}
 
-    - name: Restore dependencies cache
-      uses: actions/cache@v3
-      with:
-        path: deps
-        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+      - name: Restore dependencies cache
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
 
-    - name: Restore PLT cache
-      uses: actions/cache@v3
-      with:
-        path: priv/plts
-        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+      - name: Restore PLT cache
+        uses: actions/cache@v3
+        with:
+          path: priv/plts
+          key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
 
-    - name: Install dependencies
-      run: |
-        mix local.rebar --force
-        mix local.hex --force
-        mix deps.get
+      - name: Install dependencies
+        run: |
+          mix local.rebar --force
+          mix local.hex --force
+          mix deps.get
 
-    - name: Compile prod with warnings as errors
-      run: MIX_ENV=prod mix compile --warnings-as-errors
+      - name: Compile prod with warnings as errors
+        run: MIX_ENV=prod mix compile --warnings-as-errors
 
-    - name: Run tests
-      run: mix coveralls.github
+      - name: Run tests
+        run: mix coveralls.github
 
-    - name: Check formatting
-      run: mix format --check-formatted
-      if: ${{ matrix.check_format }}
+      - name: Check formatting
+        run: mix format --check-formatted
+        if: ${{ matrix.check_format }}
 
-    - name: Check dependencies
-      run: mix deps.unlock --check-unused
-      if: ${{ matrix.check_deps }}
+      - name: Check dependencies
+        run: mix deps.unlock --check-unused
+        if: ${{ matrix.check_deps }}
 
-    - name: Credo
-      run: mix credo
-      if: ${{ matrix.credo }}
+      - name: Credo
+        run: mix credo
+        if: ${{ matrix.credo }}
 
-    - name: Dialyzer
-      run: mix dialyzer
-      if: ${{ matrix.dialyzer }}
+      - name: Dialyzer
+        run: mix dialyzer
+        if: ${{ matrix.dialyzer }}
